@@ -74,3 +74,25 @@ optimizeSharp <- function(x, alpha, epochs = 1000, start = NULL, silent = TRUE){
     sharp = as.array(sharp)
   )
 }
+
+createModelCombinations <- function(model,parameters=NULL){
+  modelName <- deparse(substitute(model))
+  if(is.null(parameters)){
+    out <- setNames(list(
+      function(...){
+        model(...)
+      }
+    ),modelName)
+  }else{
+    parameterCombinations <- expand.grid(parameters)
+    out <- setNames(lapply(seq_len(nrow(parameterCombinations)), function(i)
+      function(...){
+        do.call(model ,c(list(...), parameterCombinations[i,,drop=F]))
+      }
+    ), str_c(modelName, apply(parameterCombinations,1,function(x) str_sub(deparse(unlist(x)),2))))
+  }
+  out
+}
+
+
+
