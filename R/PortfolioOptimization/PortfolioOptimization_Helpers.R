@@ -13,13 +13,22 @@ normalizeWeights <- function(x, alpha){
 }
 
 
+# computeSharpTensor <- function(x, weights) {
+#   RET <- torch_matmul(x - 1, weights)
+#   ret <- torch_log(1 + RET)
+#   sret <- torch_sum(ret)
+#   Tobs <- ret$size()[1]
+#   sdp <- torch_sqrt(1/(Tobs - 1) * torch_sum((ret - sret/Tobs)^2))
+#   sret / sdp
+# }
+
 computeSharpTensor <- function(x, weights) {
-  RET <- torch_matmul(x - 1, weights)
+  RET <- torch_squeeze(torch_einsum("mnp,nk->mkp",list(x-1,weights)),dim=2)
   ret <- torch_log(1 + RET)
-  sret <- torch_sum(ret)
+  sret <- torch_einsum("mn->n",ret)
   Tobs <- ret$size()[1]
-  sdp <- 1/(Tobs - 1) * torch_sum((ret - sret/Tobs)^2)
-  sret / sdp
+  sdp <- torch_std(ret,dim=1, unbiased=TRUE)
+  ((21*12) / sqrt(252)) * (1/Tobs) * sret/sdp
 }
 
 computeSharpMatrix <- function(x, weights) {
@@ -27,8 +36,8 @@ computeSharpMatrix <- function(x, weights) {
   ret <- log(1 + RET)
   sret <- sum(ret)
   Tobs <- nrow(ret)
-  sdp <- 1/(Tobs - 1) * sum((ret - sret/Tobs)^2)
-  sret / sdp
+  sdp <- (1/(Tobs - 1) * sum((ret - sret/Tobs)^2))^(0.5)
+  ((21*12) / sqrt(252)) * (1/Tobs) * sret / sdp
 }
 
 weightsModule = nn_module(
@@ -48,10 +57,17 @@ weightsModule = nn_module(
 
 
 optimizeSharp <- function(x, alpha, epochs = 1000, start = NULL, silent = TRUE){
-  x <- torch_tensor(as.matrix(x), dtype = torch_float())
+  # x <- torch_tensor(as.matrix(x), dtype = torch_float())
+  if(length(dim(x))==3){
+    x <- torch_tensor(as.matrix(x), dtype = torch_float())
+  }else{
+    # x <- torch_tensor(array(x,dim=c(dim(x),1)), dtype = torch_float())
+    x <- torch_unsqueeze(torch_tensor(as.matrix(x), dtype = torch_float()),3)
+  }
   N <- dim(x)[2]
   model <- weightsModule(N=N, alpha = alpha, start = start)
-  criterion = function(sharp){-sharp}
+  # criterion = function(sharp){-sharp}
+  criterion = function(sharp){-torch_mean(sharp)}
   optimizer = optim_adam(model$parameters, lr = 0.01)
   
   for(i in seq_len(epochs)){
