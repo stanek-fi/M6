@@ -43,7 +43,8 @@ computeSharpMatrix <- function(x, weights) {
 weightsModule = nn_module(
   initialize = function(N,alpha,start=NULL) {
     if(is.null(start)){
-      self$weights = nn_parameter(normalizeWeights(torch_ones(N,1), alpha))
+      # self$weights = nn_parameter(normalizeWeights(torch_ones(N,1), alpha))
+      self$weights = nn_parameter(normalizeWeights(torch_tensor(as.matrix(rnorm(N,1,1))), alpha))
     }else{
       self$weights = nn_parameter(normalizeWeights(torch_tensor(as.matrix(start)), alpha))
     }
@@ -56,39 +57,92 @@ weightsModule = nn_module(
 )
 
 
-optimizeSharp <- function(x, alpha, epochs = 1000, start = NULL, silent = TRUE){
-  # x <- torch_tensor(as.matrix(x), dtype = torch_float())
+# optimizeSharp <- function(x, alpha, epochs = 1000, start = NULL, silent = TRUE){
+#   if(length(dim(x))==3){
+#     x <- torch_tensor(x, dtype = torch_float())
+#   }else{
+#     x <- torch_unsqueeze(torch_tensor(as.matrix(x), dtype = torch_float()),3)
+#   }
+#   N <- dim(x)[2]
+#   model <- weightsModule(N=N, alpha = alpha, start = start)
+#   criterion = function(sharp){-torch_mean(sharp)}
+#   optimizer = optim_adam(model$parameters, lr = 0.01)
+# 
+# 
+#   for(e in seq_len(epochs)){
+#     optimizer$zero_grad()
+#     sharp = model(x)
+#     loss = criterion(sharp)
+#     loss$backward()
+#     optimizer$step()
+# 
+#     if((!silent) & (e %% 100 == 0)){
+#       cat(" Epoch:", e,"Loss: ", loss$item(),"\n")
+#     }
+#   }
+# 
+#   weights = normalizeWeights(model$weights, model$alpha)
+#   sharp = computeSharpTensor(x,weights)
+# 
+#   list(
+#     weights = as.array(weights),
+#     sharp = as.array(sharp)
+#   )
+# }
+
+
+# xbatch=x[,,bs[[b]]]
+# if(length(dim(xbatch))==2){
+#   xbatch = xbatch$view(c(dim(xbatch),1))
+# }
+# x[,,1:1]
+# x[,,c(1)]
+# xbatch$view(c(10,20,1))
+
+optimizeSharp <- function(x, alpha, epochs = 1000, numStarts = 1, batchSize = Inf, start = NULL, silent = TRUE){
   if(length(dim(x))==3){
-    x <- torch_tensor(as.matrix(x), dtype = torch_float())
+    x <- torch_tensor(x, dtype = torch_float())
   }else{
-    # x <- torch_tensor(array(x,dim=c(dim(x),1)), dtype = torch_float())
     x <- torch_unsqueeze(torch_tensor(as.matrix(x), dtype = torch_float()),3)
   }
   N <- dim(x)[2]
-  model <- weightsModule(N=N, alpha = alpha, start = start)
-  # criterion = function(sharp){-sharp}
-  criterion = function(sharp){-torch_mean(sharp)}
-  optimizer = optim_adam(model$parameters, lr = 0.01)
-  
-  for(i in seq_len(epochs)){
-    optimizer$zero_grad()
-    sharp = model(x)
-    loss = criterion(sharp)
-    loss$backward()
-    optimizer$step()
-    
-    if((!silent) & (i %% 100 == 0)){
-      cat(" Epoch:", i,"Loss: ", loss$item(),"\n")
+  R <- dim(x)[3]
+
+  temps <- lapply(1:numStarts, function(s){
+    model <- weightsModule(N=N, alpha = alpha, start = start)
+    criterion = function(sharp){-torch_mean(sharp)}
+    optimizer = optim_adam(model$parameters, lr = 0.01)
+
+    for(e in seq_len(epochs)){
+      bs <- sample(seq_len(R),replace = F)
+      bs <- split(bs, ceiling(seq_along(bs)/batchSize))
+      for(b in seq_along(bs)){
+        xbatch <- x[,,bs[[b]]]
+        if(length(dim(xbatch))==2){
+          xbatch = xbatch$view(c(dim(xbatch),1))
+        }
+        optimizer$zero_grad()
+        sharp = model(xbatch)
+        loss = criterion(sharp)
+        loss$backward()
+        optimizer$step()
+      }
+      if((!silent) & (e %% 100 == 0)){
+        cat("Start:", s," Epoch:", e,"Loss: ", loss$item(),"\n")
+      }
     }
-  }
-  
-  weights = normalizeWeights(model$weights, model$alpha)
-  sharp = computeSharpTensor(x,weights)
-  
-  list(
-    weights = as.array(weights),
-    sharp = as.array(sharp)
-  )
+
+    weights = normalizeWeights(model$weights, model$alpha)
+    sharp = computeSharpTensor(x,weights)
+
+    list(
+      weights = as.array(weights),
+      sharp = as.array(sharp)
+    )
+  })
+  s <- which.max(sapply(temps, function(temp) mean(temp$sharp)))
+  temp <- temps[[s]]
+  temp
 }
 
 createModelCombinations <- function(model,parameters=NULL){
