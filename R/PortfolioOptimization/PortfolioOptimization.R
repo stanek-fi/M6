@@ -5,9 +5,11 @@ library(tseries)
 library(PerformanceAnalytics)
 library(ggplot2)
 library(tidyquant)
+library(MASS)
 rm(list=ls())
 source("R/PortfolioOptimization/PortfolioOptimization_Helpers.R")
 source("R/PortfolioOptimization/PortfolioOptimization_Models.R")
+source("R/PortfolioOptimization/PortfolioOptimization_Copula.R")
 Stocks <- readRDS(file.path("Data","StocksSP500.RDS"))
 
 
@@ -28,6 +30,11 @@ StocksAggr <- do.call(rbind,lapply(seq_along(Stocks), function(s) {
 }))
 PriceRatios <- as.data.table(dcast(StocksAggr, Time + Interval ~ Ticker, value.var = "PriceRatio"))
 
+# hist(pmin(na.omit(c(as.matrix(PriceRatios[,-(1:2)]))),2),breaks = 50)
+# summary(na.omit(c(as.matrix(PriceRatios[,-(1:2)]))))
+# quantile(na.omit(c(as.matrix(PriceRatios[,-(1:2)]))),probs = seq(0, 1, 0.05))
+# sd(na.omit(c(as.matrix(PriceRatios[,-(1:2)]))))
+mean(na.omit(c(as.matrix(PriceRatios[,-(1:2)]))))
 
 auxiliaryColumns <- c("Time", "Interval")
 set.seed(2)
@@ -40,17 +47,18 @@ subsetPriceRatios <- samplePriceRatios(PriceRatios, N, StartDate, EndDate, auxil
 
 
 models <- c(
+  # createModelCombinations(laggedExPostOptimal, list(window=c(250,1000))),
   createModelCombinations(equalWeights),
-  # createModelCombinations(unfeasibleAnalyticAproximation, list(logTransform = c(TRUE, FALSE))),
+  createModelCombinations(unfeasibleAnalyticAproximation),
+  createModelCombinations(unfeasibleCopula, list(muInfo = c("known","mean","unknown"))),
   # unfeasibleAnalyticAproximation = unfeasibleAnalyticAproximation,
   createModelCombinations(unfeasibleExPostOptimal),
-  # createModelCombinations(laggedExPostOptimal, list(window=c(250,1000))),
   createModelCombinations(unfeasibleBootstrap)
 )
 
 intervals <- subsetPriceRatios[,unique(Interval)]
 res <- vector(mode = "list", length = length(intervals))
-i <- 50
+i <- 10
 for(i in seq_along(intervals)){
   interval <- intervals[i]
   print(as.character(interval))
@@ -79,13 +87,59 @@ if(!is.null(benchmarkModel)){
   auxiliaryColumns <- "startDate"
   d <- cbind(d[,.SD,.SDcols=auxiliaryColumns], d[,.SD,.SDcols=colnames(d)[!(colnames(d) %in% auxiliaryColumns)]] - d[[benchmarkModel]])
 }
-
 md <- melt(d, id.vars="startDate", variable.name = "model")
-# md <- md[!str_detect(model,c("equal"))]
+md <- md[!str_detect(model,c("equal")) & !str_detect(model,c("Analytic"))]
 ggplot(md,aes(x=startDate,y=value,colour=model))+
   # geom_line(alpha=0.2)+
   geom_ma(ma_fun = SMA, n = 4, linetype = "solid")
   # geom_ma(ma_fun = SMA, n = 4*4, linetype = "solid")
+
+
+
+
+
+
+
+
+
+# 
+# interval <- intervals[i]
+# print(as.character(interval))
+# startDate <- as.Date(word(interval,sep=":",1))
+# endDate <- as.Date(word(interval,sep=":",2))
+# tickers <- colnames(subsetPriceRatios)[!(colnames(subsetPriceRatios) %in% auxiliaryColumns)]
+# xpast <- subsetPriceRatios[Time<startDate,.SD,.SDcols = tickers]
+# x <- subsetPriceRatios[Interval == interval,.SD,.SDcols = tickers]
+# 
+# 
+# R <- 2
+# 
+# TObs <- nrow(x)
+# mu <- apply(x, 2, mean)
+# xdm <- as.matrix(apply(x, 2, function(col) col - mean(col)))
+# Sigma <- t(xdm) %*% xdm/ TObs 
+# xSim <- simulateCopula(TObs = TObs, R = R, Sigma = Sigma, mu = mu)
+# 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

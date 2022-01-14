@@ -56,3 +56,21 @@ unfeasibleAnalyticAproximation <- function(xpast,x, alpha=0.25, logTransform = T
     sharp = computeSharpMatrix(x,weights)
   )
 }
+
+unfeasibleCopula = function(xpast, x, alpha = 0.25, R = 100,  epochs = 100, numStarts = 1, batchSize = Inf, silent = TRUE, muInfo = "known"){
+  TObs <- nrow(x)
+  mu <- apply(x, 2, mean)
+  xdm <- as.matrix(apply(x, 2, function(col) col - mean(col)))
+  Sigma <- t(xdm) %*% xdm/ TObs 
+  mu <- switch(muInfo,
+         "known" = mu,  
+         "mean" = rep(mean(mu),length(mu)),
+         "unknown" = rep(1.000787, length(mu))
+  )  
+  xSim <- simulateCopula(TObs = TObs, R = R, Sigma = Sigma, mu = mu)
+  temp <- optimizeSharp(xSim, alpha = alpha, epochs = epochs, numStarts = numStarts, batchSize = batchSize, silent = silent)
+  list(
+    weights = temp$weights,
+    sharp = computeSharpMatrix(x,temp$weights)
+  )
+}
