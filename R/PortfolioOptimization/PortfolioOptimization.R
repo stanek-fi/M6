@@ -37,10 +37,11 @@ PriceRatios <- as.data.table(dcast(StocksAggr, Time + Interval ~ Ticker, value.v
 mean(na.omit(c(as.matrix(PriceRatios[,-(1:2)]))))
 
 auxiliaryColumns <- c("Time", "Interval")
-set.seed(2)
-N <- 5
+set.seed(12)
+N <- 100
 StartDate <- as.Date("2000-01-10")
 # StartDate <- as.Date("2015-01-18")
+# StartDate <- as.Date("2016-01-18")
 # StartDate <- as.Date("2020-01-13")
 EndDate <-as.Date("2021-11-14")
 subsetPriceRatios <- samplePriceRatios(PriceRatios, N, StartDate, EndDate, auxiliaryColumns)
@@ -49,19 +50,18 @@ subsetPriceRatios <- samplePriceRatios(PriceRatios, N, StartDate, EndDate, auxil
 models <- c(
   # createModelCombinations(laggedExPostOptimal, list(window=c(250,1000))),
   createModelCombinations(equalWeights),
-  createModelCombinations(unfeasibleAnalyticAproximation),
-  createModelCombinations(unfeasibleCopula, list(muInfo = c("known","mean","unknown"))),
-  # unfeasibleAnalyticAproximation = unfeasibleAnalyticAproximation,
-  createModelCombinations(unfeasibleExPostOptimal),
-  createModelCombinations(unfeasibleBootstrap)
+  # createModelCombinations(unfeasibleAnalyticAproximation),
+  # createModelCombinations(copulaSim, list(muInfo = c("known","knownMean","constant","estimated"),sigmaInfo = c("known","estimated"), R=1000, numStarts = c(10)))
+  createModelCombinations(copulaSim, list(muInfo = c("constant"),sigmaInfo = c("known"), R=1000, numStarts = c(1), nonnegative=c(T))),
+  createModelCombinations(copulaSim, list(muInfo = c("constant"),sigmaInfo = c("estimated"), R=1000, numStarts = c(1), nonnegative=c(T), lambda = c(0.1,0.5,0.8,0.94,0.99)))
 )
 
-intervals <- subsetPriceRatios[,unique(Interval)]
+intervals <- subsetPriceRatios[,unique(Interval)][-1]
 res <- vector(mode = "list", length = length(intervals))
-i <- 10
+i <- 1
 for(i in seq_along(intervals)){
   interval <- intervals[i]
-  print(as.character(interval))
+  print(str_c(as.character(interval), " Time: ", Sys.time()))
   startDate <- as.Date(word(interval,sep=":",1))
   endDate <- as.Date(word(interval,sep=":",2))
   tickers <- colnames(subsetPriceRatios)[!(colnames(subsetPriceRatios) %in% auxiliaryColumns)]
@@ -80,31 +80,30 @@ for(i in seq_along(intervals)){
 }
 
 
+saveRDS(res,"Results/res.RDS")
+# res <- readRDS("Results/res.RDS")
+
 d <- do.call(rbind,lapply(res, function(x) {cbind(startDate = x$info$startDate, as.data.table(lapply(x$models,function(y) y$sharp)))}))
-# benchmarkModel <- "unfeasibleExPostOptimal(numStarts = 1)"
-benchmarkModel <- NULL
+benchmarkModel <- "equalWeights"
+# benchmarkModel <- NULL
 if(!is.null(benchmarkModel)){
   auxiliaryColumns <- "startDate"
   d <- cbind(d[,.SD,.SDcols=auxiliaryColumns], d[,.SD,.SDcols=colnames(d)[!(colnames(d) %in% auxiliaryColumns)]] - d[[benchmarkModel]])
 }
 md <- melt(d, id.vars="startDate", variable.name = "model")
-md <- md[!str_detect(model,c("equal")) & !str_detect(model,c("Analytic"))]
+# md <- md[!str_detect(model,c("known"))]
 ggplot(md,aes(x=startDate,y=value,colour=model))+
   # geom_line(alpha=0.2)+
-  geom_ma(ma_fun = SMA, n = 4, linetype = "solid")
-  # geom_ma(ma_fun = SMA, n = 4*4, linetype = "solid")
+  # geom_ma(ma_fun = SMA, n = 4, linetype = "solid")+
+  geom_ma(ma_fun = SMA, n = 4*4, linetype = "solid")+
+  theme(legend.position="bottom",legend.direction='vertical')
 
 
 
 
-
-
-
-
-
-# 
+# i <- 2
 # interval <- intervals[i]
-# print(as.character(interval))
+# print(str_c(as.character(interval), " Time: ", Sys.time()))
 # startDate <- as.Date(word(interval,sep=":",1))
 # endDate <- as.Date(word(interval,sep=":",2))
 # tickers <- colnames(subsetPriceRatios)[!(colnames(subsetPriceRatios) %in% auxiliaryColumns)]
@@ -112,34 +111,6 @@ ggplot(md,aes(x=startDate,y=value,colour=model))+
 # x <- subsetPriceRatios[Interval == interval,.SD,.SDcols = tickers]
 # 
 # 
-# R <- 2
-# 
-# TObs <- nrow(x)
-# mu <- apply(x, 2, mean)
-# xdm <- as.matrix(apply(x, 2, function(col) col - mean(col)))
-# Sigma <- t(xdm) %*% xdm/ TObs 
-# xSim <- simulateCopula(TObs = TObs, R = R, Sigma = Sigma, mu = mu)
-# 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# equalWeights(xpast,x)
+# copulaSim(xpast,x)
 

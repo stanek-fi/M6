@@ -28,20 +28,19 @@ qlnormRep <- function(p, mu, sd){
 # mu <- c(1,1.1,0.9)
 # sd <- c(0.01,0.02,0.03)
 
-simulateCopula <- function(TObs, R, Sigma, mu, sd = NULL){
-  N <- length(mu)
-  norm <- sqrt(diag(Sigma))
-  if(is.null(sd)){
-    sd = norm
+simulateCopula <- function(TObs, R, sigma, muMarginal, sdMarginal = NULL){
+  N <- length(muMarginal)
+  norm <- sqrt(diag(sigma))
+  if(is.null(sdMarginal)){
+    sdMarginal = norm
   }
-  Corr <- diag(1/norm) %*% Sigma %*% diag(1/norm)
+  corr <- diag(1/norm) %*% sigma %*% diag(1/norm)
   xSim <- array(NA,dim=c(TObs,N,R))
   for(r in seq_len(R)){
-    z <- mvrnorm(TObs, mu=rep(0, N), Sigma=Corr, empirical=F)
+    z <- mvrnorm(TObs, mu=rep(0, N), Sigma=corr, empirical=F)
     u <- pnorm(z)
-    
     x <- do.call(cbind,lapply(seq_len(ncol(u)), function(i) {
-      qlnormRep(u[,i],mu[i],sd[i])
+      qlnormRep(u[,i],muMarginal[i],sdMarginal[i])
     }))
     xSim[,,r] <- x
   }
