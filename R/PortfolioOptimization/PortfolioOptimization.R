@@ -37,7 +37,7 @@ PriceRatios <- as.data.table(dcast(StocksAggr, Time + Interval ~ Ticker, value.v
 mean(na.omit(c(as.matrix(PriceRatios[,-(1:2)]))))
 
 auxiliaryColumns <- c("Time", "Interval")
-set.seed(12)
+set.seed(13)
 N <- 100
 StartDate <- as.Date("2000-01-10")
 # StartDate <- as.Date("2015-01-18")
@@ -91,11 +91,11 @@ if(!is.null(benchmarkModel)){
   d <- cbind(d[,.SD,.SDcols=auxiliaryColumns], d[,.SD,.SDcols=colnames(d)[!(colnames(d) %in% auxiliaryColumns)]] - d[[benchmarkModel]])
 }
 md <- melt(d, id.vars="startDate", variable.name = "model")
-# md <- md[!str_detect(model,c("known"))]
+md <- md[!str_detect(model,c("known"))]
 ggplot(md,aes(x=startDate,y=value,colour=model))+
   # geom_line(alpha=0.2)+
-  # geom_ma(ma_fun = SMA, n = 4, linetype = "solid")+
-  geom_ma(ma_fun = SMA, n = 4*4, linetype = "solid")+
+  geom_ma(ma_fun = SMA, n = 4, linetype = "solid")+
+  # geom_ma(ma_fun = SMA, n = 4*4, linetype = "solid")+
   theme(legend.position="bottom",legend.direction='vertical')
 
 
