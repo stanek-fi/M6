@@ -2,7 +2,10 @@ library(quantmod)
 library(data.table)
 require(TTR)
 library(BatchGetSymbols)
-
+library(stringr)
+library(imputeTS)
+set.seed(1)
+source("R/GenData/GenData_Helpers.R")
 
 StockNames <- readRDS(file.path("Data", "StockNames.RDS"))
 tickers <- StockNames[, Symbol]
@@ -24,12 +27,15 @@ Stocks <- lapply(seq_along(tickers), function(i) {
 names(Stocks)=tickers
 Stocks <- Stocks[sapply(Stocks, function(y) {!is.null(y)})]
 
-
 if(!all(names(Stocks) == tickers)){
   warning("Some stock missing")
 }
-print("recent dates:")
 table(as.Date(sapply(Stocks, function(s) s[.N,index])))
+
+
+
+
+
 
 
 invalidIndices <- "IEFM.L"

@@ -3,7 +3,9 @@ library(data.table)
 require(TTR)
 library(BatchGetSymbols)
 library(stringr)
-
+library(imputeTS)
+set.seed(1)
+source("R/GenData/GenData_Helpers.R")
 
 StockNames <- readRDS(file.path("Data", "StockNames.RDS"))
 tickers <- StockNames[!is.na(M6Id), Symbol]
@@ -28,27 +30,22 @@ Stocks <- Stocks[sapply(Stocks, function(y) {!is.null(y)})]
 if(!all(names(Stocks) == tickers)){
   warning("Some stock missing")
 }
-print("recent dates:")
 table(as.Date(sapply(Stocks, function(s) s[.N,index])))
 
 
-
-invalidIndices <- "IEFM.L"
-ii <- invalidIndices[1]
-plot(Stocks[[ii]]$IEFM.L.Adjusted)
-for(ii in invalidIndices){ #works only for consecutive error period
-  temp <- copy(Stocks[[ii]])
-  invalidRange <- temp[get(str_c(ii,".Adjusted"))<100, index]
-  startPrice <- temp[invalidRange[1]>index,][,last(na.omit(get(str_c(ii,".Adjusted"))))]
-  endPrice <- temp[invalidRange[length(invalidRange)]<index,][,first(na.omit(get(str_c(ii,".Adjusted"))))]
-  subPrice <- temp[invalidRange[1]>index,][(.N - length(invalidRange) + 1):(.N),get(str_c(ii,".Adjusted"))]
-  subPrice <- subPrice + (startPrice - subPrice[1]) 
-  subPrice <- subPrice + (seq_along(invalidRange)-1)/(length(invalidRange)) *  (endPrice - subPrice[length(subPrice)]) 
-  temp[index %in% invalidRange, IEFM.L.Adjusted := subPrice]
-  Stocks[[ii]] <- temp
-}
-plot(Stocks[[ii]]$IEFM.L.Adjusted)
+plot(Stocks[["IEFM.L"]]$IEFM.L.Adjusted) #manually correcting invalid data
+Stocks[["IEFM.L"]][IEFM.L.Adjusted<100,IEFM.L.Adjusted := NA]
 
 
-saveRDS(Stocks,file.path("Data","StocksM6.RDS"))
+StocksClean<- setNames(lapply(names(Stocks), function(ticker) {
+  stock <- Stocks[[ticker]]
+  naRows <- sum(apply(is.na(stock),1,any))
+  if(naRows>0){
+    print(str_c("Ticker: ",ticker, " Missing: ", naRows))
+    return(cbind(stock[,.(index)],stock[,lapply(.SD, noisyInterpolation), .SDcols=names(stock)[-1]]))
+  }else{
+    return(stock)
+  }
+}),names(Stocks))
 
+saveRDS(StocksClean,file.path("Data","StocksM6.RDS"))

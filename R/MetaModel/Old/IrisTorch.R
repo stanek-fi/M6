@@ -33,7 +33,6 @@ model = nn_sequential(
 # Define cost and optimizer
 criterion = nn_cross_entropy_loss()  
 optimizer = optim_adam(model$parameters, lr = 0.01)
-
 epochs = 200
 
 # Train the net
