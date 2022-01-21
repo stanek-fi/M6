@@ -62,7 +62,7 @@ for(i in 1:epochs){
   }
 }
 
-metaModel <- MetaModel(baseModel, xtype, mesaParameterSize = 1)
+metaModel <- MetaModel(baseModel, xtype, mesaParameterSize = 2)
 criterion = nn_mse_loss()
 optimizer = optim_adam(metaModel$parameters, lr = 0.01)
 epochs = 300
