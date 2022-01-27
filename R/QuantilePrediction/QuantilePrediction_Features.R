@@ -8,7 +8,6 @@ computeFeatures <- function(SD,featureList){
 }
 
 # SD <- Stocks[Ticker == "AVB"]
-# lags = 0:2
 
 Return <- function(SD) {
   temp <- SD[,.(Return = last(Adjusted)/first(Adjusted) - 1), Interval]
@@ -27,6 +26,12 @@ LagVolatility <- function(SD,lags = 1) {
   names(temp) = c("Interval", str_c("VolatilityLag",lags))
   return(temp)
 }
+
+
+
+
+
+
 
 
 

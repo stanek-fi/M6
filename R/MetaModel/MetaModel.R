@@ -1,12 +1,13 @@
-prepareBaseModel <- function(baseModel, x = NULL) {
+prepareBaseModel <- function(baseModel, x) {
   state <- baseModel$state_dict()
   
-  if(!is.null(x)){
-    meanDiff <- as.array(mean(abs(baseModel(x) - baseModel$fforward(x,state))))
-    if(meanDiff>1e-10){
-      stop("Supplied fforward method of the baseModel does not match the forward method.")
-    }
+  output <- baseModel(x)
+  outputControl <- baseModel$fforward(x,state)
+  meanDiff <- as.array(mean(abs(output - outputControl)))
+  if(meanDiff>1e-10){
+    stop("Supplied fforward method of the baseModel does not match the forward method.")
   }
+  baseModel$outputSize <- output$size(2)
   
   baseModel$stateStructure <- rapply(state, function(x) dim(x), how = "list")
   
@@ -44,6 +45,7 @@ MetaModel = nn_module(
     self$stateStructure <- baseModel$stateStructure
     self$flattenState <- baseModel$flattenState
     self$unflattenState <- baseModel$unflattenState
+    self$outputSize <- baseModel$outputSize 
     self$stateSize <- baseModel$stateSize
     self$xtypeSize <- ncol(xtype)
     self$mesaParameterSize <- mesaParameterSize
@@ -54,16 +56,33 @@ MetaModel = nn_module(
   },
   
   forward = function(x,xtype) {
-    xout <- torch_zeros(nrow(x),1)
-    for(i in seq_len(ncol(xtype))){
-      indices <- xtype[,i]>0
-      if(as.numeric(indices$max())>0){
-        mesaState <- nnf_linear(xtype[indices,][1,], self$mesaLayerWeight)
+    xout <- torch_zeros(nrow(x),self$outputSize)
+    iscoalesced = try({xtype$is_coalesced()},silent = T)
+    
+    if(iscoalesced == TRUE){
+      columns <- xtype$indices()[2,]
+      uniqueColumns <- unique(as.array(columns))
+      for(i in uniqueColumns){
+        indices <- columns == i
+        # xtypei <- torch_tensor(array(replace(numeric(xtype$size(2)), i + 1, 1), dim=c(1, xtype$size(2))))
+        xtypei <- torch_tensor(replace(numeric(xtype$size(2)), i + 1, 1)) #must add one to correct for zero indexing
+        mesaState <- nnf_linear(xtypei, self$mesaLayerWeight)
         metaStateFlat <-  self$metaLayerBias + self$metaLayer(mesaState)
         metaState <- self$unflattenState(metaStateFlat, self$stateStructure)
         xout[indices] <- self$fforward(x[indices,],metaState)
       }
+    }else{
+      for(i in seq_len(ncol(xtype))){
+        indices <- xtype[,i]>0
+        if(as.numeric(indices$max())>0){
+          mesaState <- nnf_linear(xtype[indices,][1,], self$mesaLayerWeight)
+          metaStateFlat <-  self$metaLayerBias + self$metaLayer(mesaState)
+          metaState <- self$unflattenState(metaStateFlat, self$stateStructure)
+          xout[indices] <- self$fforward(x[indices,],metaState)
+        }
+      }
     }
+
     xout
   },
   
