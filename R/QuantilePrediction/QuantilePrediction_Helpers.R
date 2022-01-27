@@ -27,6 +27,15 @@ standartizeFeatures <- function(StocksAggr, featureNames = NULL){
 }
 
 
+subsetSparseTensor <- function(x, rows){
+  rowIndices <- as.array(x$indices()[1,]) + 1L
+  selection <- rowIndices[rowIndices %in% rows]
+  i <- x$indices()[,selection] + 1L
+  v <- x$values()[selection]
+  torch_sparse_coo_tensor(i, v, c(nrow(x), ncol(x)))$coalesce()
+}
+
+
 # FFNNSoftmax = nn_module(
 #   initialize = function(layerSizes) {
 #     self$layerSizes <- layerSizes
@@ -93,4 +102,31 @@ constructFFNN = nn_module(
 #     nnf_softmax(x,2)
 #   }
 # )
+
+
+# train = list(y_train, x_train, xtype_train)
+# test = list(y_test, x_test, xtype_test)
+# trainModel <- function(model, train, test, minibatchSampler = NULL, lr = 0.01, epochs = 100){
+#   optimizer = optim_adam(metaModel$parameters, lr = lr)
+#   progress <- data.table(
+#     epoch = seq_len(epochs),
+#     loss_train = as.numeric(rep(NA, epochs)),
+#     loss_test = as.numeric(rep(NA, epochs))
+#   )
+#   for(i in 1:epochs){
+#     optimizer$zero_grad()
+#     y_pred = metaModel(x_train,xtype_train)
+#     loss = criterion(y_pred, y_train)
+#     loss$backward()
+#     optimizer$step()
+#     
+#     progress[i, loss_train := loss$item()]
+#     progress[i, loss_test := as.array(criterion(metaModel(x_test,xtype_test), y_test))]
+#     if(i %% 10 == 0){
+#       print(str_c("Epoch:", i," loss_train: ", round(progress[i,loss_train],3)," loss_test:", round(progress[i,loss_test],3), " Time:", Sys.time()))
+#     }
+#   }
+# }
+
+
 
