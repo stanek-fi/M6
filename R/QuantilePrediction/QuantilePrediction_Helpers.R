@@ -27,12 +27,103 @@ standartizeFeatures <- function(StocksAggr, featureNames = NULL){
 }
 
 
-subsetSparseTensor <- function(x, rows){
-  rowIndices <- as.array(x$indices()[1,]) + 1L
-  selection <- rowIndices[rowIndices %in% rows]
-  i <- x$indices()[,selection] + 1L
-  v <- x$values()[selection]
-  torch_sparse_coo_tensor(i, v, c(nrow(x), ncol(x)))$coalesce()
+subsetTensor <- function(x, rows, isSparse = NULL){
+  if(is.null(isSparse)){
+    isSparse = try({x$is_coalesced()},silent = T)
+  }
+  if(isSparse == TRUE){
+    rowIndices <- as.array(x$indices()[1,]) + 1L
+    selection <- rowIndices[rowIndices %in% rows]
+    i <- x$indices()[,selection] + 1L
+    v <- x$values()[selection]
+    out <- torch_sparse_coo_tensor(i, v, c(nrow(x), ncol(x)))$coalesce()
+  }else{
+    out <- x[rows,]
+  }
+  return(out)
+}
+
+
+
+minibatchSampler = function(batchSize, xtype_train){
+  rows <- as.array(xtype_train$indices()[1,]) + 1
+  columns <- as.array(xtype_train$indices()[2,]) + 1
+  uniqueColumns <- unique(columns)
+  bs <- sample(seq_along(uniqueColumns),replace = F)
+  bs <- split(bs, ceiling(seq_along(bs)/batchSize))
+  bs <- lapply(bs, function(x) uniqueColumns[x])
+  bs <- lapply(bs, function(x) which(columns %in% x))
+  bs
+}
+
+
+# optimizeModel <- function(model, y_train, x_train, xtype_train, y_test, x_test, xtype_test, criterion, epochs = 10, minibatch = Inf, tempFilePath = NULL, patience = 1, printEvery = Inf){
+trainModel <- function(model, train, test, criterion, epochs = 10, minibatch = Inf, tempFilePath = NULL, patience = 1, printEvery = Inf){
+  optimizer = optim_adam(model$parameters, lr = 0.01)
+  progress <- data.table(
+    epoch = seq_len(epochs),
+    loss_train = as.numeric(rep(NA, epochs)),
+    loss_test = as.numeric(rep(NA, epochs))
+  )
+  
+  for(e in 1:epochs){
+    
+    if(is.numeric(minibatch)){
+      temp <- sample(seq_len(nrow(train[[2]])))
+      mbs <- split(temp, ceiling(seq_along(temp)/minibatch))
+    }else{
+      mbs <- minibatch()
+    }
+    
+    for(mb in seq_along(mbs)){
+      rows <- mbs[[mb]]
+      # x_train_mb <- subsetTensor(x_train, rows = rows)
+      # y_train_mb <- subsetTensor(y_train, rows = rows)
+      # xtype_train_mb <- subsetTensor(xtype_train, rows = rows)
+      # train_mb <- lapply(train, function(x) subsetTensor(x, rows = rows))
+      isSparse <- c(rep(F,2), rep(T,length(train) - 2))
+      train_mb <- lapply(seq_along(train), function(i) subsetTensor(train[[i]], rows = rows, isSparse = isSparse[i]))
+      
+      optimizer$zero_grad()
+      # y_pred_mb = model(x_train_mb, xtype_train_mb)
+      y_pred_mb = do.call(model, train_mb[-1])
+      # loss = criterion(y_pred_mb, y_train_mb)
+      loss = criterion(y_pred_mb, train_mb[[1]])
+      loss$backward()
+      optimizer$step()
+    }
+    
+    # loss_train_e <- as.array(criterion(model(x_train,xtype_train), y_train))
+    loss_train_e <- as.array(criterion(do.call(model, train[-1]), train[[1]]))
+    # loss_test_e <- as.array(criterion(model(x_test,xtype_test), y_test))
+    loss_test_e <- as.array(criterion(do.call(model, test[-1]), test[[1]]))
+    progress[e, loss_train := loss_train_e]
+    progress[e, loss_test := loss_test_e]
+    if(e %% printEvery == 0){
+      print(str_c("Epoch:", e," loss_train: ", round(progress[e, loss_train], 3)," loss_test:", round(progress[e, loss_test], 3), " Time:", Sys.time()))
+    }
+    
+    ebest <- progress[,which.min(loss_test)]
+    
+    if((e == ebest) & !is.null(tempFilePath)){
+      torch_save(model,file.path(tempFilePath,str_c("temp",".t7")))
+    }
+    
+    if(e - ebest >= patience){
+      progress <- progress[1:e,]
+      break()
+    }
+  }
+  
+  if(!is.null(tempFilePath)){
+    model <- torch_load(file.path(tempFilePath,str_c("temp",".t7")))
+    file.remove(file.path(tempFilePath,str_c("temp",".t7")))
+  }
+  
+  return(list(
+    model = model,
+    progress = progress
+  ))
 }
 
 
