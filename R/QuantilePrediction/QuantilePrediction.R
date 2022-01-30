@@ -18,22 +18,26 @@ TimeBreaks <- seq(TimeStart, TimeEnd, b = 7*4) # forecast are made at the break 
 TimeBreaks <- TimeBreaks[TimeBreaks>as.Date("1969-12-01")]
 TimeBreaksNames <- str_c(TimeBreaks[-length(TimeBreaks)]+1, " : " , TimeBreaks[-1])
 
+TrainStart <- as.Date("1980-01-07")
+TrainEnd <- as.Date("2020-01-12")
+ValidationStart <- as.Date("2021-12-13")
+ValidationEnd <- as.Date("2022-01-09")
+# ValidationStart <- as.Date("2022-01-10")
+# ValidationEnd <- as.Date("2022-02-06")
+# ValidationStart <- as.Date("2022-02-07")
+# ValidationEnd <- as.Date("2022-03-06")
+
 s <- 1
 Stocks <- do.call(rbind,lapply(seq_along(Stocks), function(s) {
   Stock <- Stocks[[s]]
   Ticker <- names(Stocks)[s]
   colnames(Stock) <- c("index", "Open", "High", "Low", "Close", "Volume", "Adjusted")
-  # Stock <- AugmentStock(Stock, TimeEnd)
+  Stock <- AugmentStock(Stock[index>=TrainStart], ValidationEnd)
   Stock[,Interval := findInterval(index,TimeBreaks,left.open=T)]
   Stock[,Interval := factor(Interval, levels = seq_along(TimeBreaksNames), labels = TimeBreaksNames)]
   Stock[,Ticker := Ticker]
   Stock
 }))
-
-
-
-
-
 
 
 featureList <- list(
@@ -42,23 +46,31 @@ featureList <- list(
   function(SD) {LagReturn(SD, lags = 1:5)},
   function(SD) {TTR_ADX(SD)},
   function(SD) {TTR_aroon(SD)}
-  # function(SD) {TTR_aroonLast(SD)}
 )
 StocksAggr <- Stocks[,computeFeatures(.SD,featureList),.(Ticker)]
 featureNames <- names(StocksAggr)[-(1:3)]
 StocksAggr[, ReturnQuintile := computeQuintile(Return), Interval]
-
 StocksAggr <- imputeFeatures(StocksAggr, featureNames = featureNames)
 StocksAggr <- standartizeFeatures(StocksAggr, featureNames = featureNames)
 StocksAggr[, IntervalStart := as.Date(str_sub(Interval,1,10))]
+StocksAggr[, IntervalEnd := as.Date(str_sub(Interval,14,23))]
 StocksAggr <- StocksAggr[order(IntervalStart,Ticker)]
-StocksAggr <- StocksAggr[Ticker %in% unique(StocksAggr$Ticker)[1:100]]
+
+TrainRows <- which(StocksAggr[,(IntervalStart >= TrainStart) & (IntervalEnd <= TrainEnd)])
+TestRows <- which(StocksAggr[,(IntervalStart > TrainEnd) & (IntervalEnd < ValidationStart)])
+ValidationRows <- which(StocksAggr[,(IntervalStart >= ValidationStart) & (IntervalEnd <= ValidationEnd)])
 
 y <- StocksAggr[,ReturnQuintile]
-y = torch_tensor(t(sapply(y,function(x) replace(numeric(5), x:5, 1))), dtype = torch_float())
+y <- torch_tensor(t(sapply(y,function(x) {
+  if(is.na(x)){
+    rep(NA,5)
+  }else{
+    replace(numeric(5), x:5, 1)
+  }
+})), dtype = torch_float())
 
 x <- StocksAggr[,.SD,.SDcols = featureNames]
-x = torch_tensor(as.matrix(x), dtype = torch_float())
+x <- torch_tensor(as.matrix(x), dtype = torch_float())
 
 xtype_factor <- as.factor(StocksAggr$Ticker)
 i <- torch_tensor(t(cbind(seq_along(xtype_factor),as.integer(xtype_factor))),dtype=torch_int64())
@@ -66,17 +78,15 @@ v <- torch_tensor(rep(1,length(xtype_factor)))
 xtype <- torch_sparse_coo_tensor(i, v, c(length(xtype_factor),length(levels(xtype_factor))))$coalesce()
 
 
-trainSplit <- 0.90
-trainN <- round(nrow(x)*trainSplit)
-trainRows <- 1:trainN
-testRows <- (trainN+1):nrow(x)
-
-y_train <- y[trainRows,]
-x_train <- x[trainRows,]
-xtype_train <- subsetTensor(xtype, rows = trainRows)
-y_test <- y[testRows,]
-x_test <- x[testRows,]
-xtype_test <- subsetTensor(xtype, rows = testRows)
+y_train <- y[TrainRows,]
+x_train <- x[TrainRows,]
+xtype_train <- subsetTensor(xtype, rows = TrainRows)
+y_test <- y[TestRows,]
+x_test <- x[TestRows,]
+xtype_test <- subsetTensor(xtype, rows = TestRows)
+y_validation <- y[ValidationRows,]
+x_validation <- x[ValidationRows,]
+xtype_validation <- subsetTensor(xtype, rows = ValidationRows)
 criterion = function(y_pred,y) {ComputeRPSTensor(y_pred,y)}
 
 
@@ -96,6 +106,8 @@ Sys.time() - start
 baseModel <- fit$model
 baseModelProgress <- fit$progress
 
+y_pred <- baseModel(x_validation)
+ComputeRPSTensor(y_pred,y_validation)
 
 # metaModel ---------------------------------------------------------------
 
@@ -118,6 +130,8 @@ temp <- rbind(
 ggplot(temp, aes(x = epoch, y = value, colour =variable, linetype = type))+
   geom_line()
 
+y_pred <- metaModel(x_validation, xtype_validation)
+ComputeRPSTensor(y_pred,y_validation)
 
 
 # mesaModel ---------------------------------------------------------------

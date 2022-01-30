@@ -1,16 +1,26 @@
 AugmentStock <- function(Stock, TimeEnd){
-  temp <- seq(max(Stock$index)+1,TimeEnd,by=1)
-  temp <- temp[!(weekdays(temp) %in% c("sobota", "neděle"))]
-  StockAug <- data.table(
-    index = temp
-  )
-  rbind(Stock, StockAug, fill=TRUE)
+  if(max(Stock$index)+1<TimeEnd){
+    temp <- seq(max(Stock$index)+1,TimeEnd,by=1)
+    temp <- temp[!(weekdays(temp) %in% c("sobota", "neděle"))]
+    StockAug <- data.table(
+      index = temp
+    )
+    rbind(Stock, StockAug, fill=TRUE)
+  }else{
+    Stock
+  }
 }
 
-standartize <- function(x){(x - mean(x)) / (sd(x) + 1e-5)}
+standartize <- function(x){(x - mean(x,na.rm=T)) / (sd(x, na.rm = T) + 1e-5)}
 
-computeQuintile <- function(x){
-  findInterval(rank(x)/length(x),c(0,0.2,0.4,0.6,0.8,1), left.open=T)
+# computeQuintile <- function(x){ 
+#   findInterval(rank(x)/length(x),c(0,0.2,0.4,0.6,0.8,1), left.open=T)
+# } 
+
+computeQuintile <- function(x){ 
+  nas <- is.na(x)
+  out <- findInterval(rank(x[!nas])/length(x[!nas]),c(0,0.2,0.4,0.6,0.8,1), left.open=T)
+  ifelse(nas,NA,out[cumsum(!nas)])
 } 
 
 ComputeRPSTensor <- function(y_pred,y){
