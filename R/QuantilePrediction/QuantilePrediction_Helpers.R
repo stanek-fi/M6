@@ -1,3 +1,12 @@
+AugmentStock <- function(Stock, TimeEnd){
+  temp <- seq(max(Stock$index)+1,TimeEnd,by=1)
+  temp <- temp[!(weekdays(temp) %in% c("sobota", "neděle"))]
+  StockAug <- data.table(
+    index = temp
+  )
+  rbind(Stock, StockAug, fill=TRUE)
+}
+
 standartize <- function(x){(x - mean(x)) / (sd(x) + 1e-5)}
 
 computeQuintile <- function(x){

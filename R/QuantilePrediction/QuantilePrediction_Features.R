@@ -20,6 +20,7 @@ LagReturn <- function(SD,lags = 1) {
   names(temp) = c("Interval", str_c("ReturnLag",lags))
   return(temp)
 }
+
 LagVolatility <- function(SD,lags = 1) {
   temp <- SD[,.(Volatility = mean(diff(log(Adjusted))^2)), Interval]
   temp <- cbind(temp[,.(Interval)], as.data.table(temp[,shift(Volatility, n=lags, fill = NA)]))
@@ -27,7 +28,26 @@ LagVolatility <- function(SD,lags = 1) {
   return(temp)
 }
 
+TTR_ADX <- function(SD) {
+  temp <- cbind(SD,ADX(SD[,.(High,Low,Close)]))
+  temp <- temp[,lapply(.SD, function(x) mean(x)),Interval, .SDcols=c("DIp", "DIn", "DX", "ADX")]
+  temp <- temp[,c(.(Interval = Interval),lapply(.SD, function(x) shift(x, n=1, fill = NA))), .SDcols=c("DIp", "DIn", "DX", "ADX")]
+  return(temp)
+}
 
+TTR_aroon <- function(SD) {
+  temp <- cbind(SD,aroon(SD[,.(High,Low)]))
+  temp <- temp[,lapply(.SD, function(x) mean(x)),Interval, .SDcols=c("aroonUp", "aroonDn", "oscillator")]
+  temp[,c(.(Interval = Interval),lapply(.SD, function(x) shift(x, n=1, fill = NA))), .SDcols=c("aroonUp", "aroonDn", "oscillator")]
+  return(temp)
+}
+
+TTR_aroonLast <- function(SD) {
+  temp <- cbind(SD,aroon(SD[,.(High,Low)]))
+  temp <- temp[,lapply(.SD, function(x) last(x)),Interval, .SDcols=c("aroonUp", "aroonDn", "oscillator")]
+  temp[,c(.(Interval = Interval),lapply(.SD, function(x) shift(x, n=1, fill = NA))), .SDcols=c("aroonUp", "aroonDn", "oscillator")]
+  return(temp)
+}
 
 
 

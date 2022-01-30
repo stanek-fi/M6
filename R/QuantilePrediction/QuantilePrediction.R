@@ -2,6 +2,7 @@ library(data.table)
 library(stringr)
 library(torch)
 library(ggplot2)
+library(TTR)
 rm(list=ls())
 tempFilePath <- "C:/Users/stane/M6temp"
 source("R/QuantilePrediction/QuantilePrediction_Helpers.R")
@@ -16,22 +17,32 @@ TimeStart <- TimeEnd - (7*4) * 1000
 TimeBreaks <- seq(TimeStart, TimeEnd, b = 7*4) # forecast are made at the break date, ie on x[t]+1 : x[t+1]
 TimeBreaks <- TimeBreaks[TimeBreaks>as.Date("1969-12-01")]
 TimeBreaksNames <- str_c(TimeBreaks[-length(TimeBreaks)]+1, " : " , TimeBreaks[-1])
-  
+
 s <- 1
 Stocks <- do.call(rbind,lapply(seq_along(Stocks), function(s) {
   Stock <- Stocks[[s]]
   Ticker <- names(Stocks)[s]
-  colnames(Stock) <- c("index", "Open", "High", "Low", "Close", "Volume", "Adjusted")             
+  colnames(Stock) <- c("index", "Open", "High", "Low", "Close", "Volume", "Adjusted")
+  # Stock <- AugmentStock(Stock, TimeEnd)
   Stock[,Interval := findInterval(index,TimeBreaks,left.open=T)]
   Stock[,Interval := factor(Interval, levels = seq_along(TimeBreaksNames), labels = TimeBreaksNames)]
   Stock[,Ticker := Ticker]
   Stock
 }))
 
+
+
+
+
+
+
 featureList <- list(
   function(SD) {Return(SD)}, #first is just return for y generation
   function(SD) {LagVolatility(SD, lags = 1:5)},
-  function(SD) {LagReturn(SD, lags = 1:5)}
+  function(SD) {LagReturn(SD, lags = 1:5)},
+  function(SD) {TTR_ADX(SD)},
+  function(SD) {TTR_aroon(SD)}
+  # function(SD) {TTR_aroonLast(SD)}
 )
 StocksAggr <- Stocks[,computeFeatures(.SD,featureList),.(Ticker)]
 featureNames <- names(StocksAggr)[-(1:3)]
@@ -55,7 +66,7 @@ v <- torch_tensor(rep(1,length(xtype_factor)))
 xtype <- torch_sparse_coo_tensor(i, v, c(length(xtype_factor),length(levels(xtype_factor))))$coalesce()
 
 
-trainSplit <- 0.95
+trainSplit <- 0.90
 trainN <- round(nrow(x)*trainSplit)
 trainRows <- 1:trainN
 testRows <- (trainN+1):nrow(x)
@@ -89,12 +100,12 @@ baseModelProgress <- fit$progress
 # metaModel ---------------------------------------------------------------
 
 metaModel <- MetaModel(baseModel, xtype_train, mesaParameterSize = 1)
-minibatch <- function() {minibatchSampler(100,xtype_train)}
+minibatch <- function() {minibatchSampler(10,xtype_train)}
 train <- list(y_train, x_train, xtype_train)
 test <- list(y_test, x_test, xtype_test)
 
 start <- Sys.time()
-fit <- trainModel(model = metaModel, train, test, criterion, epochs = 20, minibatch = minibatch, tempFilePath = tempFilePath, patience = 10, printEvery = 1)
+fit <- trainModel(model = metaModel, train, test, criterion, epochs = 100, minibatch = minibatch, tempFilePath = tempFilePath, patience = 10, printEvery = 1)
 Sys.time() - start 
 metaModel <- fit$model
 metaModelProgress <- fit$progress
@@ -112,7 +123,7 @@ ggplot(temp, aes(x = epoch, y = value, colour =variable, linetype = type))+
 # mesaModel ---------------------------------------------------------------
 
 mesaModel <- metaModel$MesaModel(metaModel)()
-j <- 83
+j <- 82
 rows_train <- xtype_train$indices()[2,] == (j-1)
 x_train_subset <- x_train[rows_train,]
 y_train_subset <- y_train[rows_train]
