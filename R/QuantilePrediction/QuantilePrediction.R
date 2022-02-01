@@ -39,15 +39,22 @@ Stocks <- do.call(rbind,lapply(seq_along(Stocks), function(s) {
   Stock
 }))
 
-
-featureList <- list(
-  function(SD) {Return(SD)}, #first is just return for y generation
-  function(SD) {LagVolatility(SD, lags = 1:5)},
-  function(SD) {LagReturn(SD, lags = 1:5)},
-  function(SD) {TTR_ADX(SD)},
-  function(SD) {TTR_aroon(SD)}
+featureList <- c(
+  list(
+    function(SD) {Return(SD)}, #first is just return for y generation
+    function(SD) {LagVolatility(SD, lags = 1:5)},
+    function(SD) {LagReturn(SD, lags = 1:5)}
+  ),
+  TTR
 )
-StocksAggr <- Stocks[,computeFeatures(.SD,featureList),.(Ticker)]
+Sanitize <- T
+if(Sanitize){
+  StocksAggrIn <- Stocks[index < ValidationStart,computeFeatures(.SD,featureList),.(Ticker)]
+  StocksAggrAll <- Stocks[,computeFeatures(.SD,featureList),.(Ticker)]
+  StocksAggr <- rbind(StocksAggrIn,StocksAggrAll[as.Date(str_sub(Interval,1,20))>=ValidationStart])
+}else{
+  StocksAggr <- Stocks[,computeFeatures(.SD,featureList),.(Ticker)]
+}
 featureNames <- names(StocksAggr)[-(1:3)]
 StocksAggr[, ReturnQuintile := computeQuintile(Return), Interval]
 StocksAggr <- imputeFeatures(StocksAggr, featureNames = featureNames)
@@ -133,6 +140,7 @@ ggplot(temp, aes(x = epoch, y = value, colour =variable, linetype = type))+
 y_pred <- metaModel(x_validation, xtype_validation)
 ComputeRPSTensor(y_pred,y_validation)
 
+# cbind(as.array(y_validation),as.array(y_pred))
 
 # mesaModel ---------------------------------------------------------------
 

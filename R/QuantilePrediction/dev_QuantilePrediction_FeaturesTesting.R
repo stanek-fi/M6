@@ -50,7 +50,7 @@ temp[,c(.(Interval = Interval),lapply(.SD, function(x) shift(x, n=1, fill = NA))
 #   geom_line()
 
 
-#aroon #this appears to imporve performance by 0.4!!! double check
+#aroon 
 temp <- cbind(SD,aroon(SD[,.(High,Low)]))
 temp <- temp[,lapply(.SD, function(x) mean(x)),Interval, .SDcols=c("aroonUp", "aroonDn", "oscillator")]
 temp[,c(.(Interval = Interval),lapply(.SD, function(x) shift(x, n=1, fill = NA))), .SDcols=c("aroonUp", "aroonDn", "oscillator")]
@@ -65,43 +65,108 @@ temp[,c(.(Interval = Interval),lapply(.SD, function(x) shift(x, n=1, fill = NA))
 #   geom_line()
 
 
+#atr 
+# temp <- cbind(SD,ATR(SD[,.(High,Low, Close)]))
+# 
+# f <- ATR
+# SDcols <- c("High", "Low", "Close")
+# Normalize <- T
+# 
+# naRows <- apply(is.na(SD[,.SD,.SDcols=SDcols]),1,any)
+# temp <- f(SD[!naRows,.SD,.SDcols=SDcols])
+# temp <- temp[ifelse(naRows,NA,cumsum(!naRows)),]
+# SDcols <- colnames(temp)
+# if(Normalize){
+#   temp <- apply(temp, 2, function(x) x / SD$Close)
+# }
+# temp <- cbind(SD,temp)
+# temp <- temp[,lapply(.SD, function(x) mean(x, na.rm = T)),Interval, .SDcols=SDcols]
+# temp <- temp[,c(.(Interval = Interval),lapply(.SD, function(x) shift(x, n=1, fill = NA))), .SDcols=SDcols]
+
+temp <- TTRWrapper(SD = SD, f = ATR, SDcols = c("High", "Low", "Close"),Normalize = F)
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
 
 
 
 
+temp <- TTRWrapper(SD = SD, f = BBands, SDcols = c("High", "Low", "Close"),Normalize = c(T, T, T, F))
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+
+data(ttrc)
+temp <- CCI(ttrc[,c("High","Low","Close")])
+as.data.table(cci)
+
+
+temp <- TTRWrapper(SD = SD, f = CCI, SDcols = c("High", "Low", "Close"),Normalize = F, SDcolsOut = "cci")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
 
 
 
+temp <- TTRWrapper(SD = SD, f = CCI, SDcols = c("High", "Low", "Close"),Normalize = F, SDcolsOut = "cci")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+
+#not included becouse it is of odd form and is not clear how should be normalized
+data(ttrc)
+ad <- chaikinAD(ttrc[,c("High","Low","Close")], ttrc[,"Volume"])
+
+temp <- TTRWrapper(SD = SD, f = chaikinAD, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsOut = "chaikinAD", SDcolsPlus = "Volume", Transform = list(function(x) c(NA,diff(x))))
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+# temp[,cci := c(NA, diff(cci))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
 
 
 
+data(ttrc)
+volatility <- chaikinVolatility(ttrc[,c("High","Low")])
+
+temp <- TTRWrapper(SD = SD, f = chaikinVolatility, SDcols = c("High", "Low"), Normalize = F, SDcolsOut = "chaikinVolatility")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
 
 
 
-
-# x <- SD$Adjusted
-# plot(x,type="line")
-# MACD(x)
-# RSI(x)
-
+temp <- TTRWrapper(SD = SD, f = CLV, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsOut = "CLV")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
 
 
+temp <- TTRWrapper(SD = SD, f = CMF, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsPlus = "Volume", SDcolsOut = "CMF")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
 
 
-
-
-
-
-
-
-
-
+temp <- TTRWrapper(SD = SD, f = CMO, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "CMO")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
 
 
 
+temp <- TTRWrapper(SD = SD, f = CTI, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "CTI")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
 
 
-
+temp1 <- TTRWrapper(SD = SD, f = CTI, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "CTI")
+temp1
+# temp2 <- TTRWrapper(SD = SD[index<as.Date("2022-01-10")], f = CTI, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "CTI")
+temp2 <- TTRWrapper(SD = SD[index<as.Date("2021-12-13")], f = CTI, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "CTI")
+temp2
 
 
 

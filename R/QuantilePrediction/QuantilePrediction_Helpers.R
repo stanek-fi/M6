@@ -29,7 +29,7 @@ ComputeRPSTensor <- function(y_pred,y){
 }
 
 imputeNA <- function(x){
-  ifelse(is.na(x),median(x,na.rm = T),x)
+  ifelse(is.na(x)|is.infinite(x),median(x,na.rm = T),x)
 }
 
 imputeFeatures <- function(StocksAggr, featureNames = NULL){
@@ -119,7 +119,7 @@ trainModel <- function(model, train, test, criterion, epochs = 10, minibatch = I
     progress[e, loss_train := loss_train_e]
     progress[e, loss_test := loss_test_e]
     if(e %% printEvery == 0){
-      print(str_c("Epoch:", e," loss_train: ", round(progress[e, loss_train], 3)," loss_test:", round(progress[e, loss_test], 3), " Time:", Sys.time()))
+      print(str_c("Epoch:", e," loss_train: ", round(progress[e, loss_train], 4)," loss_test:", round(progress[e, loss_test], 4), " Time:", Sys.time()))
     }
     
     ebest <- progress[,which.min(loss_test)]
