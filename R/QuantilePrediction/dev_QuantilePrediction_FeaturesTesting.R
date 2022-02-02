@@ -170,3 +170,7 @@ temp2
 
 
 
+
+x <- cumsum(rnorm(21,0,0.1))+100
+CTI(x)
+

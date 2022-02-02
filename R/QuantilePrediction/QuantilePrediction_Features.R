@@ -60,6 +60,8 @@ TTRWrapper <- function(SD, f, SDcols, Normalize, SDcolsOut = NULL, SDcolsPlus = 
       colnames(temp)=SDcolsOut
     }
   }
+  temp <- temp[c(rep(NA, sum(!naRows)-nrow(temp)),1:nrow(temp)),,drop=F] #added to correct when product of f is of shorter lenght
+  
   temp <- temp[ifelse(naRows,NA,cumsum(!naRows)),,drop=F]
   SDcolsOut <- colnames(temp)
   if(length(Normalize)==1){
@@ -85,21 +87,17 @@ TTRWrapper <- function(SD, f, SDcols, Normalize, SDcolsOut = NULL, SDcolsPlus = 
 
 
 TTR <- list(
-  # function(SD) {TTRWrapper(SD = SD, f = ADX, SDcols = c("High", "Low", "Close"), Normalize = F)},
-  # function(SD) {TTRWrapper(SD = SD, f = aroon, SDcols = c("High", "Low"), Normalize = F)},
-  # function(SD) {TTRWrapper(SD = SD, f = ATR, SDcols = c("High", "Low", "Close"), Normalize = T)},
-  # function(SD) {TTRWrapper(SD = SD, f = BBands, SDcols = c("High", "Low", "Close"), Normalize = c(T, T, T, F))},
-  # function(SD) {TTRWrapper(SD = SD, f = CCI, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsOut = "cci")},
-  # function(SD) {TTRWrapper(SD = SD, f = chaikinAD, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsOut = "chaikinAD", SDcolsPlus = "Volume", Transform = list(function(x) c(NA,diff(x))))},
-  # function(SD) {TTRWrapper(SD = SD, f = chaikinVolatility, SDcols = c("High", "Low"),Normalize = F, SDcolsOut = "chaikinVolatility")},
-  # function(SD) {TTRWrapper(SD = SD, f = CLV, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsOut = "CLV")},
-  # function(SD) {TTRWrapper(SD = SD, f = CMF, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsPlus = "Volume", SDcolsOut = "CMF")},
-  # function(SD) {TTRWrapper(SD = SD, f = CMO, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "CMO")},
-  function(SD) {TTRWrapper(SD = SD, f = CTI, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "CTI")} #this one migh be slow
-  # function(SD) {TTRWrapper(SD = SD, f = CTI, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "CTI", n=5)},
-  # function(SD) {TTRWrapper(SD = SD, f = CTI, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "CTI", n=10)},
-  # function(SD) {TTRWrapper(SD = SD, f = CTI, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "CTI", n=20)},
-  # function(SD) {TTRWrapper(SD = SD, f = CTI, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "CTI", n=40)}
+  function(SD) {TTRWrapper(SD = SD, f = ADX, SDcols = c("High", "Low", "Close"), Normalize = F)},
+  function(SD) {TTRWrapper(SD = SD, f = aroon, SDcols = c("High", "Low"), Normalize = F)},
+  function(SD) {TTRWrapper(SD = SD, f = ATR, SDcols = c("High", "Low", "Close"), Normalize = T)},
+  function(SD) {TTRWrapper(SD = SD, f = BBands, SDcols = c("High", "Low", "Close"), Normalize = c(T, T, T, F))},
+  function(SD) {TTRWrapper(SD = SD, f = CCI, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsOut = "cci")},
+  function(SD) {TTRWrapper(SD = SD, f = chaikinAD, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsOut = "chaikinAD", SDcolsPlus = "Volume", Transform = list(function(x) c(NA,diff(x))))},
+  function(SD) {TTRWrapper(SD = SD, f = chaikinVolatility, SDcols = c("High", "Low"),Normalize = F, SDcolsOut = "chaikinVolatility")},
+  function(SD) {TTRWrapper(SD = SD, f = CLV, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsOut = "CLV")},
+  function(SD) {TTRWrapper(SD = SD, f = CMF, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsPlus = "Volume", SDcolsOut = "CMF")},
+  function(SD) {TTRWrapper(SD = SD, f = CMO, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "CMO")}
+  # function(SD) {TTRWrapper(SD = SD, f = CTI, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "CTI")} #this one migh be slow
 )
 
 # 
