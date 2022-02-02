@@ -45,7 +45,6 @@ standartizeFeatures <- function(StocksAggr, featureNames = NULL){
   StocksAggr[,c(setNames(lapply(otherNames, function(x) get(x)),otherNames), lapply(.SD, function(x) standartize(x))), Interval, .SDcols = featureNames]
 }
 
-
 subsetTensor <- function(x, rows, isSparse = NULL){
   if(is.null(isSparse)){
     isSparse = try({x$is_coalesced()},silent = T)

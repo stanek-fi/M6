@@ -10,15 +10,15 @@ source("R/QuantilePrediction/QuantilePrediction_Features.R")
 source("R/QuantilePrediction/QuantilePrediction_Models.R")
 source("R/MetaModel/MetaModel.R")
 
-StocksNames <- readRDS(file.path("Data","StockNames.RDS"))
+StockNames <- readRDS(file.path("Data","StockNames.RDS"))
 
 Stocks <- readRDS(file.path("Data","StocksM6.RDS"))
-# Tickers <- StocksNames[Symbol %in% names(Stocks),ETF]
+# Tickers <- StockNames[Symbol %in% names(Stocks),ETF]
 # Stocks <- Stocks[Tickers]
 
 # Stocks <- readRDS(file.path("Data","StocksAll.RDS"))
-# SP500Tickers <- sample(StocksNames[SP500==TRUE,Symbol],100)
-# ETFTickers <- sample(StocksNames[ETF==TRUE,Symbol],0)
+# SP500Tickers <- sample(StockNames[SP500==TRUE,Symbol],100)
+# ETFTickers <- sample(StockNames[ETF==TRUE,Symbol],0)
 # Stocks <- Stocks[c(SP500Tickers,ETFTickers)]
 
 TimeEnd <- as.Date("2023-01-08")
@@ -37,8 +37,33 @@ ValidationEnd <- as.Date("2022-01-09")
 # ValidationStart <- as.Date("2022-02-07")
 # ValidationEnd <- as.Date("2022-03-06")
 
-s <- 1
-Stocks <- do.call(rbind,lapply(seq_along(Stocks), function(s) {
+featureList <- c(
+  list(
+    function(SD, BY) {Return(SD)}, #first is just return for y generation
+    # function(SD, BY) {LagVolatility(SD, lags = 1:5)},
+    function(SD, BY) {LagReturn(SD, lags = 1:5)},
+    function(SD, BY) {IsETF(SD, BY, StockNames = StockNames)}
+  ),
+  TTR
+)
+
+# start <- Sys.time()
+# s <- 1
+# Stocks <- do.call(rbind,lapply(seq_along(Stocks), function(s) {
+#   Stock <- Stocks[[s]]
+#   Ticker <- names(Stocks)[s]
+#   colnames(Stock) <- c("index", "Open", "High", "Low", "Close", "Volume", "Adjusted")
+#   Stock <- AugmentStock(Stock[index>=TrainStart & index<=ValidationEnd], ValidationEnd)
+#   Stock[,Interval := findInterval(index,TimeBreaks,left.open=T)]
+#   Stock[,Interval := factor(Interval, levels = seq_along(TimeBreaksNames), labels = TimeBreaksNames)]
+#   Stock[,Ticker := Ticker]
+#   Stock
+# }))
+# StocksAggr <- Stocks[,computeFeatures(.SD, .BY, featureList),.(Ticker)]
+# Sys.time() - start 
+
+start <- Sys.time()
+StocksAggr <- do.call(rbind,lapply(seq_along(Stocks), function(s) {
   Stock <- Stocks[[s]]
   Ticker <- names(Stocks)[s]
   colnames(Stock) <- c("index", "Open", "High", "Low", "Close", "Volume", "Adjusted")
@@ -46,33 +71,30 @@ Stocks <- do.call(rbind,lapply(seq_along(Stocks), function(s) {
   Stock[,Interval := findInterval(index,TimeBreaks,left.open=T)]
   Stock[,Interval := factor(Interval, levels = seq_along(TimeBreaksNames), labels = TimeBreaksNames)]
   Stock[,Ticker := Ticker]
-  Stock
+  Stock[,computeFeatures(.SD, .BY, featureList),.(Ticker)]
 }))
+Sys.time() - start 
 
-featureList <- c(
-  list(
-    function(SD) {Return(SD)}, #first is just return for y generation
-    # function(SD) {LagVolatility(SD, lags = 1:5)},
-    function(SD) {LagReturn(SD, lags = 1:5)}
-  )
-  # TTR
-)
-Sanitize <- F
-if(Sanitize){
-  StocksAggrIn <- Stocks[index < ValidationStart,computeFeatures(.SD,featureList),.(Ticker)]
-  StocksAggrAll <- Stocks[,computeFeatures(.SD,featureList),.(Ticker)]
-  StocksAggrOut <- StocksAggrAll[as.Date(str_sub(Interval,1,20))>=ValidationStart]
-  StocksAggr <- rbind(StocksAggrIn,StocksAggrOut)
-}else{
-  StocksAggr <- Stocks[,computeFeatures(.SD,featureList),.(Ticker)]
-}
-
-featureNames <- names(StocksAggr)[-(1:3)]
+featureNames <- names(StocksAggr)[!(names(StocksAggr) %in% c("Ticker", "Interval", "Return"))]
 StocksAggr[, ReturnQuintile := computeQuintile(Return), Interval]
-StocksAggr <- imputeFeatures(StocksAggr, featureNames = featureNames)
-StocksAggr <- standartizeFeatures(StocksAggr, featureNames = featureNames)
 StocksAggr[, IntervalStart := as.Date(str_sub(Interval,1,10))]
 StocksAggr[, IntervalEnd := as.Date(str_sub(Interval,14,23))]
+
+CheckLeakage <- F
+if(CheckLeakage){
+  StocksCensored <- Stocks
+  StocksCensored <- StocksCensored[index >= ValidationStart, (c("Open", "High", "Low", "Close", "Volume", "Adjusted")) := lapply(1:6,function(x) NA)][]
+  StocksCensoredAggr <- StocksCensored[,computeFeatures(.SD, .BY, featureList),.(Ticker)]
+  for(featureName in featureNames){
+    same <- identical(StocksAggr[, get(featureName)], StocksCensoredAggr[, get(featureName)])
+    if(!same){
+      stop(str_c("Possible leakage in ", featureName, ", diff=", diff))
+    }
+  }
+}
+
+StocksAggr <- imputeFeatures(StocksAggr, featureNames = featureNames)
+StocksAggr <- standartizeFeatures(StocksAggr, featureNames = featureNames)
 StocksAggr <- StocksAggr[order(IntervalStart,Ticker)]
 
 TrainRows <- which(StocksAggr[,(IntervalStart >= TrainStart) & (IntervalEnd <= TrainEnd)])
@@ -197,33 +219,6 @@ ggplot(temp, aes(x = epoch, y = value, colour =variable, shape=type))+
   coord_cartesian(ylim = c(0.145, 0.16))+
   geom_hline(yintercept = 0.16, alpha=0.5)
 
-
-
-# mesaStates1 <- as.vector(as.array(metaModel$state_dict()$mesaLayerWeight))
-# mesaStates2 <- sapply(mesaModels, function(x) as.array(x$state_dict()$mesaState))
-# ggplot(data.table(mesaStates1,mesaStates2),aes(x=mesaStates1,mesaStates2))+
-#   geom_point()
-
-
-# mesaModel <- metaModel$MesaModel(metaModel)()
-# j <- 83
-# rows_train <- xtype_train$indices()[2,] == (j-1)
-# x_train_subset <- x_train[rows_train,]
-# y_train_subset <- y_train[rows_train]
-# rows_test <- xtype_test$indices()[2,] == (j-1)
-# x_test_subset <- x_test[rows_test,]
-# y_test_subset <- y_test[rows_test]
-# train <- list(y_train_subset, x_train_subset)
-# test <- list(y_test_subset, x_test_subset)
-# 
-# start <- Sys.time()
-# fit <- trainModel(model = mesaModel, train, test, criterion, epochs = 50, minibatch = Inf, tempFilePath = NULL, patience = Inf, printEvery = 10)
-# Sys.time() - start 
-# mesaModel <- fit$model
-# mesaModelProgress <- fit$progress
-# 
-# as.array(mesaModel$state_dict())
-# t(as.array(metaModel$state_dict()$mesaLayerWeight))[max(1,(j-1)):(j+1)]
 
 
 

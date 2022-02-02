@@ -1,5 +1,5 @@
-computeFeatures <- function(SD,featureList){
-  temp <- lapply(featureList, function(f) f(SD))
+computeFeatures <- function(SD, BY, featureList){
+  temp <- lapply(featureList, function(f) f(SD,BY))
   control <- lapply(temp, function(x) x[,Interval])
   if(length(unique.default(control))>1){
     stop("Some feature does not align.")
@@ -32,17 +32,28 @@ Return <- function(SD) {
   return(temp)
 }
 
-LagReturn <- function(SD,lags = 1) {
+IsETF <- function(SD, BY, StockNames) {
+  ETF <- as.numeric(StockNames[Symbol == BY$Ticker, ETF])
+  temp <- SD[,.(ETF = ETF), Interval]
+  return(temp)
+}
+
+LagReturn <- function(SD, lags = 1) {
   temp <- SD[,.(Return = lastNum(Adjusted)/firstNum(Adjusted) - 1), Interval]
   temp <- cbind(temp[,.(Interval)], as.data.table(temp[,shift(Return, n=lags, fill = NA)]))
   names(temp) = c("Interval", str_c("ReturnLag",lags))
   return(temp)
 }
 
-LagVolatility <- function(SD,lags = 1) {
+LagVolatility <- function(SD, lags = 1) {
   temp <- SD[,.(Volatility = mean(diff(log(na.omit(Adjusted)))^2)), Interval]
   temp <- cbind(temp[,.(Interval)], as.data.table(temp[,shift(Volatility, n=lags, fill = NA)]))
   names(temp) = c("Interval", str_c("VolatilityLag",lags))
+  return(temp)
+}
+
+Return <- function(SD) {
+  temp <- SD[,.(Return = lastNum(Adjusted)/firstNum(Adjusted) - 1), Interval]
   return(temp)
 }
 
@@ -87,16 +98,16 @@ TTRWrapper <- function(SD, f, SDcols, Normalize, SDcolsOut = NULL, SDcolsPlus = 
 
 
 TTR <- list(
-  function(SD) {TTRWrapper(SD = SD, f = ADX, SDcols = c("High", "Low", "Close"), Normalize = F)},
-  function(SD) {TTRWrapper(SD = SD, f = aroon, SDcols = c("High", "Low"), Normalize = F)},
-  function(SD) {TTRWrapper(SD = SD, f = ATR, SDcols = c("High", "Low", "Close"), Normalize = T)},
-  function(SD) {TTRWrapper(SD = SD, f = BBands, SDcols = c("High", "Low", "Close"), Normalize = c(T, T, T, F))},
-  function(SD) {TTRWrapper(SD = SD, f = CCI, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsOut = "cci")},
-  function(SD) {TTRWrapper(SD = SD, f = chaikinAD, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsOut = "chaikinAD", SDcolsPlus = "Volume", Transform = list(function(x) c(NA,diff(x))))},
-  function(SD) {TTRWrapper(SD = SD, f = chaikinVolatility, SDcols = c("High", "Low"),Normalize = F, SDcolsOut = "chaikinVolatility")},
-  function(SD) {TTRWrapper(SD = SD, f = CLV, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsOut = "CLV")},
-  function(SD) {TTRWrapper(SD = SD, f = CMF, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsPlus = "Volume", SDcolsOut = "CMF")},
-  function(SD) {TTRWrapper(SD = SD, f = CMO, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "CMO")}
+  function(SD, BY) {TTRWrapper(SD = SD, f = ADX, SDcols = c("High", "Low", "Close"), Normalize = F)},
+  function(SD, BY) {TTRWrapper(SD = SD, f = aroon, SDcols = c("High", "Low"), Normalize = F)},
+  function(SD, BY) {TTRWrapper(SD = SD, f = ATR, SDcols = c("High", "Low", "Close"), Normalize = T)},
+  function(SD, BY) {TTRWrapper(SD = SD, f = BBands, SDcols = c("High", "Low", "Close"), Normalize = c(T, T, T, F))},
+  function(SD, BY) {TTRWrapper(SD = SD, f = CCI, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsOut = "cci")},
+  function(SD, BY) {TTRWrapper(SD = SD, f = chaikinAD, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsOut = "chaikinAD", SDcolsPlus = "Volume", Transform = list(function(x) c(NA,diff(x))))},
+  function(SD, BY) {TTRWrapper(SD = SD, f = chaikinVolatility, SDcols = c("High", "Low"),Normalize = F, SDcolsOut = "chaikinVolatility")},
+  function(SD, BY) {TTRWrapper(SD = SD, f = CLV, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsOut = "CLV")},
+  function(SD, BY) {TTRWrapper(SD = SD, f = CMF, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsPlus = "Volume", SDcolsOut = "CMF")},
+  function(SD, BY) {TTRWrapper(SD = SD, f = CMO, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "CMO")}
   # function(SD) {TTRWrapper(SD = SD, f = CTI, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "CTI")} #this one migh be slow
 )
 
