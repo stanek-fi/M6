@@ -50,16 +50,24 @@ subsetTensor <- function(x, rows, isSparse = NULL){
     isSparse = try({x$is_coalesced()},silent = T)
   }
   if(isSparse == TRUE){
+    # print("asdas")
     rowIndices <- as.array(x$indices()[1,]) + 1L
     selection <- rowIndices[rowIndices %in% rows]
     i <- x$indices()[,selection] + 1L
+    i[1,] <- seq_along(selection)
     v <- x$values()[selection]
-    out <- torch_sparse_coo_tensor(i, v, c(nrow(x), ncol(x)))$coalesce()
+    # out <- torch_sparse_coo_tensor(i, v, c(nrow(x), ncol(x)))$coalesce()
+    out <- torch_sparse_coo_tensor(i, v, c(length(selection), ncol(x)))$coalesce()
   }else{
     out <- x[rows,]
   }
+  # print("sdfsd")
   return(out)
 }
+
+
+
+
 
 
 
@@ -189,6 +197,95 @@ constructFFNN = nn_module(
     x
   }
 )
+
+
+GenStocksAggr <- function(Stocks, IntervalInfos, featureList, CheckLeakage = T){
+  # CheckLeakage <- T
+  # s <- 1
+  # IntervalInfo <- IntervalInfos[[1]]
+  colnamesStock <- c("index", "Open", "High", "Low", "Close", "Volume", "Adjusted")
+  StocksAggr <- do.call(rbind,lapply(seq_along(Stocks), function(s) {
+    
+    if(s %% 10 == 0){
+      print(str_c("Stock:", s, " Time:", Sys.time()))
+    }
+    
+    StockAggr <- lapply(IntervalInfos, function(IntervalInfo){
+      Stock <- Stocks[[s]]
+      Ticker <- names(Stocks)[s]
+      colnames(Stock) <- colnamesStock
+      Stock <- AugmentStock(Stock[index>=IntervalInfo$Start & index<=IntervalInfo$End], IntervalInfo$End)
+      Stock[,Interval := findInterval(index,IntervalInfo$TimeBreaks,left.open=T)]
+      Stock[,Interval := factor(Interval, levels = seq_along(IntervalInfo$IntervalNames), labels = IntervalInfo$IntervalNames)]
+      Stock[,Ticker := Ticker]
+      StockAggr <- Stock[,computeFeatures(.SD, .BY, featureList),.(Ticker)]
+      
+      if(CheckLeakage){
+        featureNames <- names(StockAggr)[!(names(StockAggr) %in% c("Ticker", "Interval", "Return"))]
+        StockCensored <- copy(Stock)
+        StockCensored <- StockCensored[index >= IntervalInfo$CheckLeakageStart, (c("Open", "High", "Low", "Close", "Volume", "Adjusted")) := lapply(1:6,function(x) NA)][]
+        StockCensoredAggr <- StockCensored[,computeFeatures(.SD, .BY, featureList),.(Ticker)]
+        for(featureName in featureNames){
+          same <- identical(StockAggr[, get(featureName)], StockCensoredAggr[, get(featureName)])
+          if(!same){
+            stop(str_c("Possible leakage in ", featureName, ", stock = ", Ticker))
+          }
+        }
+      }
+      StockAggr[,Shift := IntervalInfo$Shift]
+      StockAggr
+    })
+    do.call(rbind,StockAggr)
+  }))
+  StocksAggr[, ReturnQuintile := computeQuintile(Return), Interval]
+  StocksAggr[, IntervalStart := as.Date(str_sub(Interval,1,10))]
+  StocksAggr[, IntervalEnd := as.Date(str_sub(Interval,14,23))]
+  StocksAggr
+}
+
+
+
+# GenIntervalInfos = function(TimeEnd, OmitLast, Shifts){
+#   lapply(Shifts, function(Shift) {
+#   # TimeStart <- (TimeEnd - Shift) - (7*4) * 691
+#   TimeStart <- (TimeEnd - Shift) - (7*4) * 1000
+#   TimeBreaks <- seq(TimeStart, TimeEnd, b = 7*4) # forecast are made at the break date, ie on x[t]+1 : x[t+1]
+#   IntervalStarts <- TimeBreaks[-length(TimeBreaks)]+1
+#   IntervalEnds <- TimeBreaks[-1]
+#   IntervalNames <- str_c(IntervalStarts, " : " , IntervalEnds)
+#   list(
+#     Shift = Shift,
+#     TimeBreaks = TimeBreaks,
+#     IntervalStarts = IntervalStarts,
+#     IntervalEnds = IntervalEnds,
+#     IntervalNames = IntervalNames,
+#     Start = IntervalStarts[1],
+#     End = IntervalEnds[(length(IntervalEnds)-OmitLast)],
+#     CheckLeakageStart = IntervalStarts[(length(IntervalStarts)-OmitLast)]
+#   )
+# })
+# }
+
+GenIntervalInfos = function(TimeEnd, Submission, Shifts){
+  lapply(Shifts, function(Shift) {
+    # TimeStart <- (TimeEnd - Shift) - (7*4) * 691
+    TimeStart <- (TimeEnd - Shift) - (7*4) * 1000
+    TimeBreaks <- seq(TimeStart, TimeEnd, b = 7*4) # forecast are made at the break date, ie on x[t]+1 : x[t+1]
+    IntervalStarts <- TimeBreaks[-length(TimeBreaks)]+1
+    IntervalEnds <- TimeBreaks[-1]
+    IntervalNames <- str_c(IntervalStarts, " : " , IntervalEnds)
+    list(
+      Shift = Shift,
+      TimeBreaks = TimeBreaks,
+      IntervalStarts = IntervalStarts,
+      IntervalEnds = IntervalEnds,
+      IntervalNames = IntervalNames,
+      Start = IntervalStarts[1],
+      End = IntervalEnds[(length(IntervalEnds)-(Submission-12))],
+      CheckLeakageStart = IntervalStarts[(length(IntervalStarts)-(Submission-12))]
+    )
+  })
+}
 
 
 # FFNNSoftmax = nn_module(

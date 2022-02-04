@@ -59,7 +59,11 @@ Return <- function(SD) {
 
 
 TTRWrapper <- function(SD, f, SDcols, Normalize, SDcolsOut = NULL, SDcolsPlus = NULL, Transform = NULL, ...){
-  naRows <- apply(is.na(SD[,.SD,.SDcols=SDcols]),1,any)
+  # naRowsOld <- apply(is.na(SD[,.SD,.SDcols=SDcols]),1,any)
+  naRows <- SD[,!complete.cases(.SD),.SDcols=SDcols]
+  # if(!identical(naRowsOld,naRows)){
+  #   stop("sdf")
+  # }
   if(is.null(SDcolsPlus)){
     temp <- f(SD[!naRows,.SD,.SDcols=SDcols], ...)
   }else{
