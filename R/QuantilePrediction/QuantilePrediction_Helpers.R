@@ -1,7 +1,8 @@
 AugmentStock <- function(Stock, TimeEnd){
   if(max(Stock$index)+1<TimeEnd){
     temp <- seq(max(Stock$index)+1,TimeEnd,by=1)
-    temp <- temp[!(weekdays(temp) %in% c("sobota", "neděle"))]
+    # temp <- temp[!(weekdays(temp) %in% c("sobota", "neděle"))]
+    temp <- temp[!(weekdays(temp, abbreviate = T) %in% c("so", "ne"))]
     StockAug <- data.table(
       index = temp
     )
@@ -41,7 +42,7 @@ imputeFeatures <- function(StocksAggr, featureNames = NULL){
 
 
 standartizeFeatures <- function(StocksAggr, featureNames = NULL){
-  otherNames <- names(StocksAggr)[!(names(StocksAggr) %in% featureNames)]
+  otherNames <- names(StocksAggr)[!(names(StocksAggr) %in% c("Interval", featureNames))]
   StocksAggr[,c(setNames(lapply(otherNames, function(x) get(x)),otherNames), lapply(.SD, function(x) standartize(x))), Interval, .SDcols = featureNames]
 }
 
@@ -266,7 +267,8 @@ GenStocksAggr <- function(Stocks, IntervalInfos, featureList, CheckLeakage = T){
 # })
 # }
 
-GenIntervalInfos = function(TimeEnd, Submission, Shifts){
+GenIntervalInfos = function(Submission, Shifts = 0, TimeEnd = as.Date("2023-02-05")){
+  # as.Date("2023-01-08") + 4*7
   lapply(Shifts, function(Shift) {
     # TimeStart <- (TimeEnd - Shift) - (7*4) * 691
     TimeStart <- (TimeEnd - Shift) - (7*4) * 1000
@@ -281,8 +283,8 @@ GenIntervalInfos = function(TimeEnd, Submission, Shifts){
       IntervalEnds = IntervalEnds,
       IntervalNames = IntervalNames,
       Start = IntervalStarts[1],
-      End = IntervalEnds[(length(IntervalEnds)-(Submission-12))],
-      CheckLeakageStart = IntervalStarts[(length(IntervalStarts)-(Submission-12))]
+      End = IntervalEnds[(length(IntervalEnds)-(12-Submission))],
+      CheckLeakageStart = IntervalStarts[(length(IntervalStarts)-(12-Submission))]
     )
   })
 }

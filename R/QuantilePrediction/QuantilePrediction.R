@@ -23,8 +23,8 @@ featureList <- c(
 
 # Shifts <- c(0)
 Shifts <- c(0,7,14,21)
-OmitLast <- 11
-IntervalInfos <- GenIntervalInfos(TimeEnd, OmitLast, Shifts)
+Submission = 0
+IntervalInfos <- GenIntervalInfos(Submission = Submission, Shifts = Shifts)
 
 
 GenerateStockAggr <- F
@@ -56,8 +56,8 @@ TrainEnd <- as.Date("2020-01-01")
 # TrainEnd <- as.Date("2021-01-01")
 # ValidationStart <- as.Date("2021-01-01")
 # ValidationStart <- as.Date("2021-12-13")
-ValidationStart <- IntervalInfos[[1]]$IntervalStarts[length(IntervalInfos[[1]]$IntervalStarts) - OmitLast - 0]
-ValidationEnd <- IntervalInfos[[1]]$IntervalEnds[length(IntervalInfos[[1]]$IntervalEnds) - OmitLast]
+ValidationStart <- IntervalInfos[[1]]$IntervalStarts[length(IntervalInfos[[1]]$IntervalStarts) - (12 - Submission) - 0]
+ValidationEnd <- IntervalInfos[[1]]$IntervalEnds[length(IntervalInfos[[1]]$IntervalEnds) - (12 - Submission)]
 
 TrainRows <- which(StocksAggr[,(IntervalStart >= TrainStart) & (IntervalEnd <= TrainEnd)])
 TestRows <- which(StocksAggr[,(IntervalStart > TrainEnd) & (IntervalEnd < ValidationStart)])
