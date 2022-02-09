@@ -21,13 +21,13 @@ featureList <- c(
   TTR
 )
 
-# Shifts <- c(0)
-Shifts <- c(0,7,14,21)
+Shifts <- c(0)
+# Shifts <- c(0,7,14,21)
 Submission = 0
 IntervalInfos <- GenIntervalInfos(Submission = Submission, Shifts = Shifts)
 
 
-GenerateStockAggr <- F
+GenerateStockAggr <- T
 if(GenerateStockAggr){
   StockNames <- readRDS(file.path("Data","StockNames.RDS"))
   Stocks <- readRDS(file.path("Data","StocksM6.RDS"))
@@ -35,7 +35,7 @@ if(GenerateStockAggr){
   # SP500Tickers <- sample(StockNames[SP500==TRUE,Symbol],100)
   # ETFTickers <- sample(StockNames[ETF==TRUE,Symbol],0)
   # Stocks <- Stocks[c(SP500Tickers,ETFTickers)]
-  StocksAggr <- GenStocksAggr(Stocks, IntervalInfos, featureList, CheckLeakage = F)
+  StocksAggr <- GenStocksAggr(Stocks, IntervalInfos, featureList, CheckLeakage = T)
   saveRDS(StocksAggr, file.path("Precomputed","StocksAggr.RDS"))
 }else{
   StocksAggr <- readRDS(file.path("Precomputed","StocksAggr.RDS"))

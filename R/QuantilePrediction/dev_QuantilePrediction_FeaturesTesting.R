@@ -31,8 +31,19 @@ library(TTR)
 library(fTrading)
 
 
+s <- 1
+IntervalInfo <- IntervalInfos[[1]]
+colnamesStock <- c("index", "Open", "High", "Low", "Close", "Volume", "Adjusted")
+Stock <- Stocks[[s]]
+Ticker <- names(Stocks)[s]
+colnames(Stock) <- colnamesStock
+Stock <- AugmentStock(Stock[index>=IntervalInfo$Start & index<=IntervalInfo$End], IntervalInfo$End)
+Stock[,Interval := findInterval(index,IntervalInfo$TimeBreaks,left.open=T)]
+Stock[,Interval := factor(Interval, levels = seq_along(IntervalInfo$IntervalNames), labels = IntervalInfo$IntervalNames)]
+Stock[,Ticker := Ticker]
+SD <- Stock
 
-SD <- Stocks[Ticker == "AVB"]
+# SD <- Stocks[Ticker == "AVB"]
 
 #ADX
 temp <- cbind(SD,ADX(SD[,.(High,Low,Close)]))
@@ -162,15 +173,209 @@ ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour 
   geom_line()
 
 
-temp1 <- TTRWrapper(SD = SD, f = CTI, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "CTI")
-temp1
-# temp2 <- TTRWrapper(SD = SD[index<as.Date("2022-01-10")], f = CTI, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "CTI")
-temp2 <- TTRWrapper(SD = SD[index<as.Date("2021-12-13")], f = CTI, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "CTI")
-temp2
+# temp1 <- TTRWrapper(SD = SD, f = CTI, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "CTI")
+# temp1
+# # temp2 <- TTRWrapper(SD = SD[index<as.Date("2022-01-10")], f = CTI, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "CTI")
+# temp2 <- TTRWrapper(SD = SD[index<as.Date("2021-12-13")], f = CTI, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "CTI")
+# temp2
+# 
+# 
+# temp <- TTRWrapper(SD = SD, f = CTI, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "CTI")
+# temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+# ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+#   geom_line()
+
+
+
+temp <- TTRWrapper(SD = SD, f = DonchianChannel, SDcols = c("High", "Low"), Normalize = T)
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = DPO, SDcols = c("Adjusted"), Normalize = T, SDcolsOut = "DPO")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = DVI, SDcols = c("Adjusted"), Normalize = F)
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = EMV, SDcols = c("High", "Low"), SDcolsPlus = "Volume", Normalize = T)
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = GMMA, SDcols = c("Close"), Normalize = T, short = c(10), long=c(30,60))
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = KST, SDcols = c("Adjusted"), Normalize = F)
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = MACD, SDcols = c("Close"), Normalize = F)
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = MFI, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsPlus = "Volume", SDcolsOut = "MFI")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = OBV, SDcols = c("Close"), Normalize = F, SDcolsPlus = "Volume", Transform = list(function(x) c(NA,diff(x))))
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = PBands, SDcols = c("Close"), Normalize = T)
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = ROC, SDcols = c("Close"), Normalize = F, SDcolsOut = "ROC")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = momentum, SDcols = c("Close"), Normalize = F, SDcolsOut = "ROC")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = RSI, SDcols = c("Close"), Normalize = F, SDcolsOut = "RSI")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = runPercentRank, SDcols = c("Close"), Normalize = F)
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = SAR, SDcols =  c("High", "Low"), Normalize = T)
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = SMA, SDcols = c("Close"), Normalize = T, SDcolsOut = "SMA")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = EMA, SDcols = c("Close"), Normalize = T, SDcolsOut = "EMA")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = DEMA, SDcols = c("Close"), Normalize = T, SDcolsOut = "DEMA")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = WMA, SDcols = c("Close"), Normalize = T, SDcolsOut = "WMA")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = EVWMA, SDcols = c("Close"), SDcolsPlus = "Volume", Normalize = T, SDcolsOut = "EVWMA")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = ZLEMA, SDcols = c("Close"), Normalize = T, SDcolsOut = "WMA")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = VWAP, SDcols = c("Close"), SDcolsPlus = "Volume", Normalize = T, SDcolsOut = "EVWMA")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = HMA, SDcols = c("Close"), Normalize = T, SDcolsOut = "WMA")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
 
 
 
 
-x <- cumsum(rnorm(21,0,0.1))+100
-CTI(x)
+
+temp <- TTRWrapper(SD = SD, f = SNR, SDcols = c("High", "Low", "Close"), Normalize = F, n=60)
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+
+
+
+
+temp <- TTRWrapper(SD = SD, f = stoch, SDcols = c("High", "Low", "Close"), Normalize = F)
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = SMI, SDcols = c("High", "Low", "Close"), Normalize = F)
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+
+temp <- TTRWrapper(SD = SD, f = TDI, SDcols = c("Close"), Normalize = T)
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+
+temp <- TTRWrapper(SD = SD, f = TRIX, SDcols = c("Adjusted"), Normalize = F)
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = ultimateOscillator, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsOut = "ultimateOscillator")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+
+temp <- TTRWrapper(SD = SD, f = VHF, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "VHF")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+
+temp <- TTRWrapper(SD = SD, f = volatility, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "volatility")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+
+temp <- TTRWrapper(SD = SD, f = volatility, SDcols = c("Open", "High", "Low", "Close"), Normalize = F, SDcolsOut = "volatility", calc = "garman.klass")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+
+
+temp <- TTRWrapper(SD = SD, f = williamsAD, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsOut = "williamsAD", Transform = list(function(x) c(NA,diff(x))))
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+
+
+temp <- TTRWrapper(SD = SD, f = WPR, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsOut = "WPR")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = ZigZag, SDcols = c("High", "Low", "Close"), Normalize = T, SDcolsOut = "ZigZag")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
 

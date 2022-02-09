@@ -207,7 +207,7 @@ GenStocksAggr <- function(Stocks, IntervalInfos, featureList, CheckLeakage = T){
   colnamesStock <- c("index", "Open", "High", "Low", "Close", "Volume", "Adjusted")
   StocksAggr <- do.call(rbind,lapply(seq_along(Stocks), function(s) {
     
-    if(s %% 10 == 0){
+    if(s %% 1 == 0){
       print(str_c("Stock:", s, " Time:", Sys.time()))
     }
     

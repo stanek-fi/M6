@@ -109,11 +109,11 @@ GenQuantilePredictionArray <- function(QuantilePrediction){
 
 
 
-ComputeSharpTensor <- function(weights, y) {
+ComputeSharpTensor <- function(weights, y, eps = 0) {
   RET <- torch_einsum("nkt,nk->nt",list(y,weights))
   ret <- torch_log(RET + 1)
   sret <- ret$sum(2)
-  sdp <- torch_std(ret,dim=2, unbiased=TRUE)
-  # sdp <- 1
-  ((21*12) / sqrt(252)) * (1/20) * sret/sdp
+  # sdp <- torch_std(ret,dim=2, unbiased=TRUE)
+  sdp <- 1
+  ((21*12) / sqrt(252)) * (1/20) * sret/ (sdp + eps)
 }
