@@ -94,7 +94,7 @@ temp[,c(.(Interval = Interval),lapply(.SD, function(x) shift(x, n=1, fill = NA))
 # temp <- temp[,lapply(.SD, function(x) mean(x, na.rm = T)),Interval, .SDcols=SDcols]
 # temp <- temp[,c(.(Interval = Interval),lapply(.SD, function(x) shift(x, n=1, fill = NA))), .SDcols=SDcols]
 
-temp <- TTRWrapper(SD = SD, f = ATR, SDcols = c("High", "Low", "Close"),Normalize = F)
+temp <- TTRWrapper(SD = SD, f = ATR, SDcols = c("High", "Low", "Close"),Normalize = T, n=30)
 temp[,time:= as.Date(str_sub(Interval, 1, 10))]
 ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
   geom_line()
@@ -262,6 +262,14 @@ temp[,time:= as.Date(str_sub(Interval, 1, 10))]
 ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
   geom_line()
 
+
+# a1 <- 100
+# a2 <- a1+20
+# SAR(SD[1:a1,.SD,.SDcols =  c("High", "Low")])[1:a1]  - SAR(SD[1:a2,.SD,.SDcols =  c("High", "Low")])[1:a1]
+# 
+# 
+
+
 temp <- TTRWrapper(SD = SD, f = SMA, SDcols = c("Close"), Normalize = T, SDcolsOut = "SMA")
 temp[,time:= as.Date(str_sub(Interval, 1, 10))]
 ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
@@ -378,4 +386,8 @@ temp <- TTRWrapper(SD = SD, f = ZigZag, SDcols = c("High", "Low", "Close"), Norm
 temp[,time:= as.Date(str_sub(Interval, 1, 10))]
 ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
   geom_line()
+
+
+
+ZigZag(SD[1:16,.SD,.SDcols = c("High", "Low", "Close")])[1:16] - ZigZag(SD[1:34,.SD,.SDcols = c("High", "Low", "Close")])[1:16]
 

@@ -229,7 +229,8 @@ GenStocksAggr <- function(Stocks, IntervalInfos, featureList, CheckLeakage = T){
         for(featureName in featureNames){
           same <- identical(StockAggr[, get(featureName)], StockCensoredAggr[, get(featureName)])
           if(!same){
-            stop(str_c("Possible leakage in ", featureName, ", stock = ", Ticker))
+            print(str_c("Possible leakage in ", featureName, ", stock = ", Ticker, " (s=",s,")"))
+            # stop(str_c("Possible leakage in ", featureName, ", stock = ", Ticker, " (s=",s,")"))
           }
         }
       }
