@@ -29,6 +29,12 @@ ComputeRPSTensor <- function(y_pred,y){
   mean(temp$sum(2)/5)
 }
 
+ComputeRPSTensorVector <- function(y_pred,y){
+  temp <- (y_pred$cumsum(2) - y)^2
+  temp$sum(2)/5
+}
+
+
 imputeNA <- function(x){
   ifelse(is.na(x)|is.infinite(x),median(x,na.rm = T),x)
 }
@@ -43,7 +49,7 @@ imputeFeatures <- function(StocksAggr, featureNames = NULL){
 
 standartizeFeatures <- function(StocksAggr, featureNames = NULL){
   otherNames <- names(StocksAggr)[!(names(StocksAggr) %in% c("Interval", featureNames))]
-  StocksAggr[,c(setNames(lapply(otherNames, function(x) get(x)),otherNames), lapply(.SD, function(x) standartize(x))), Interval, .SDcols = featureNames]
+  StocksAggr[,c(setNames(lapply(otherNames, function(x) get(x)),otherNames), lapply(.SD, function(x) standartize(x))), .(Interval, M6Dataset), .SDcols = featureNames]
 }
 
 subsetTensor <- function(x, rows, isSparse = NULL){
@@ -200,11 +206,13 @@ constructFFNN = nn_module(
 )
 
 
-GenStocksAggr <- function(Stocks, IntervalInfos, featureList, CheckLeakage = T){
+
+
+GenStocksAggr <- function(Stocks, IntervalInfos, featureList, M6Datasets, CheckLeakage = T){
   # CheckLeakage <- T
   # s <- 1
   # IntervalInfo <- IntervalInfos[[1]]
-  colnamesStock <- c("index", "Open", "High", "Low", "Close", "Volume", "Adjusted")
+  # colnamesStock <- c("index", "Open", "High", "Low", "Close", "Volume", "Adjusted")
   StocksAggr <- do.call(rbind,lapply(seq_along(Stocks), function(s) {
     
     if(s %% 1 == 0){
@@ -214,7 +222,7 @@ GenStocksAggr <- function(Stocks, IntervalInfos, featureList, CheckLeakage = T){
     StockAggr <- lapply(IntervalInfos, function(IntervalInfo){
       Stock <- Stocks[[s]]
       Ticker <- names(Stocks)[s]
-      colnames(Stock) <- colnamesStock
+      # colnames(Stock) <- colnamesStock
       Stock <- AugmentStock(Stock[index>=IntervalInfo$Start & index<=IntervalInfo$End], IntervalInfo$End)
       Stock[,Interval := findInterval(index,IntervalInfo$TimeBreaks,left.open=T)]
       Stock[,Interval := factor(Interval, levels = seq_along(IntervalInfo$IntervalNames), labels = IntervalInfo$IntervalNames)]
@@ -235,14 +243,15 @@ GenStocksAggr <- function(Stocks, IntervalInfos, featureList, CheckLeakage = T){
         }
       }
       StockAggr[,Shift := IntervalInfo$Shift]
-      StockAggr
+      StockAggr[,M6Dataset := M6Datasets[s]]
+      return(StockAggr)
     })
-    do.call(rbind,StockAggr)
+    return(do.call(rbind,StockAggr))
   }))
-  StocksAggr[, ReturnQuintile := computeQuintile(Return), Interval]
+  StocksAggr[, ReturnQuintile := computeQuintile(Return), .(Interval, M6Dataset)]
   StocksAggr[, IntervalStart := as.Date(str_sub(Interval,1,10))]
   StocksAggr[, IntervalEnd := as.Date(str_sub(Interval,14,23))]
-  StocksAggr
+  return(StocksAggr)
 }
 
 

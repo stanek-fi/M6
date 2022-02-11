@@ -3,7 +3,7 @@ library(stringr)
 library(torch)
 library(ggplot2)
 library(TTR)
-rm(list=ls())
+rm(list=ls());gc()
 tempFilePath <- "C:/Users/stane/M6temp"
 source("R/QuantilePrediction/QuantilePrediction_Helpers.R")
 source("R/QuantilePrediction/QuantilePrediction_Features.R")
@@ -27,41 +27,59 @@ Shifts <- c(0,7,14,21)
 Submission = 0
 IntervalInfos <- GenIntervalInfos(Submission = Submission, Shifts = Shifts)
 
-
 GenerateStockAggr <- F
 if(GenerateStockAggr){
   StockNames <- readRDS(file.path("Data","StockNames.RDS"))
-  Stocks <- readRDS(file.path("Data","StocksM6.RDS"))
-  # Stocks <- readRDS(file.path("Data","StocksAll.RDS"))
-  # SP500Tickers <- sample(StockNames[SP500==TRUE,Symbol],100)
-  # ETFTickers <- sample(StockNames[ETF==TRUE,Symbol],0)
-  # Stocks <- Stocks[c(SP500Tickers,ETFTickers)]
-  StocksAggr <- GenStocksAggr(Stocks, IntervalInfos, featureList, CheckLeakage = F)
+  Stocks <- readRDS(file.path("Data","StocksAll.RDS"))
+  # temp <- StockNames[M6Dataset>0 & M6Dataset<=2][order(M6Dataset),.(Symbol,M6Dataset)]
+  temp <- StockNames[M6Dataset>0][order(M6Dataset),.(Symbol,M6Dataset)]
+  Stocks <- Stocks[temp$Symbol]
+  M6Datasets <- temp$M6Dataset
+  StocksAggr <- GenStocksAggr(Stocks, IntervalInfos, featureList, M6Datasets, CheckLeakage = F)
   saveRDS(StocksAggr, file.path("Precomputed","StocksAggr.RDS"))
 }else{
   StocksAggr <- readRDS(file.path("Precomputed","StocksAggr.RDS"))
 }
 
+# GenerateStockAggr <- F
+# if(GenerateStockAggr){
+#   StockNames <- readRDS(file.path("Data","StockNames.RDS"))
+#   Stocks <- readRDS(file.path("Data","StocksM6.RDS"))
+#   StocksAggr <- GenStocksAggr(Stocks, IntervalInfos, featureList, CheckLeakage = F)
+#   saveRDS(StocksAggr, file.path("Precomputed","StocksAggr.RDS"))
+# }else{
+#   StocksAggr <- readRDS(file.path("Precomputed","StocksAggr.RDS"))
+# }
 
+# StocksAggr[Interval=="2022-01-17 : 2022-02-13",table(ReturnQuintile),M6Dataset]
 
-featureNames <- names(StocksAggr)[!(names(StocksAggr) %in% c("Ticker", "Interval", "Return", "Shift", "ReturnQuintile", "IntervalStart", "IntervalEnd"))]
+featureNames <- names(StocksAggr)[!(names(StocksAggr) %in% c("Ticker", "Interval", "Return", "Shift", "M6Dataset", "ReturnQuintile", "IntervalStart", "IntervalEnd"))]
 StocksAggr <- imputeFeatures(StocksAggr, featureNames = featureNames)
 StocksAggr <- standartizeFeatures(StocksAggr, featureNames = featureNames)
 StocksAggr <- StocksAggr[order(IntervalStart,Ticker)]
-
+# StocksAggr <- StocksAggr[ETF>0]
 
 # TrainStart <- as.Date("1990-01-01")
-TrainStart <- as.Date("1990-01-01")
+# TrainStart <- as.Date("1990-01-01")
+TrainStart <- as.Date("2010-01-01")
 TrainEnd <- as.Date("2019-01-01")
 # TrainEnd <- as.Date("2021-01-01")
+# ValidationStart <- as.Date("2020-01-01")
+# ValidationEnd <- as.Date("2021-01-01")
 ValidationStart <- as.Date("2021-01-01")
-# ValidationStart <- as.Date("2021-12-13")
+
 # ValidationStart <- IntervalInfos[[1]]$IntervalStarts[length(IntervalInfos[[1]]$IntervalStarts) - (12 - Submission) - 1]
 ValidationEnd <- IntervalInfos[[1]]$IntervalEnds[length(IntervalInfos[[1]]$IntervalEnds) - (12 - Submission) - 1]
 
+
+
+
 TrainRows <- which(StocksAggr[,(IntervalStart >= TrainStart) & (IntervalEnd <= TrainEnd)])
+TrainRowsM6Dataset <- StocksAggr[TrainRows,M6Dataset]
 TestRows <- which(StocksAggr[,(IntervalStart > TrainEnd) & (IntervalEnd < ValidationStart)])
+TestRowsM6Dataset <- StocksAggr[TestRows,M6Dataset]
 ValidationRows <- which(StocksAggr[,(IntervalStart >= ValidationStart) & (IntervalEnd <= ValidationEnd)])
+ValidationRowsM6Dataset <- StocksAggr[ValidationRows,M6Dataset]
 
 y <- StocksAggr[,ReturnQuintile]
 y <- torch_tensor(t(sapply(y,function(x) {
@@ -74,6 +92,7 @@ y <- torch_tensor(t(sapply(y,function(x) {
 x <- StocksAggr[,.SD,.SDcols = featureNames]
 x <- torch_tensor(as.matrix(x), dtype = torch_float())
 xtype_factor <- as.factor(StocksAggr$Ticker)
+xtype_factor_M6Dataset <- StocksAggr[,.(M6Dataset = unique(M6Dataset)),Ticker][match(levels(xtype_factor),Ticker)]
 i <- torch_tensor(t(cbind(seq_along(xtype_factor),as.integer(xtype_factor))),dtype=torch_int64())
 v <- torch_tensor(rep(1,length(xtype_factor)))
 xtype <- torch_sparse_coo_tensor(i, v, c(length(xtype_factor),length(levels(xtype_factor))))$coalesce()
@@ -105,7 +124,7 @@ test <- list(y_test, x_test)
 
 if(T){
   start <- Sys.time()
-  fit <- trainModel(model = baseModel, train, test, criterion, epochs = 100, minibatch = 50, tempFilePath = tempFilePath, patience = 5, printEvery = 1)
+  fit <- trainModel(model = baseModel, train, test, criterion, epochs = 500, minibatch = 500, tempFilePath = tempFilePath, patience = 5, printEvery = 1)
   Sys.time() - start 
   baseModel <- fit$model
   baseModelProgress <- fit$progress
@@ -117,11 +136,24 @@ if(T){
 }
 y_pred_base <- baseModel(x_validation)
 loss_validation_base <- as.array(ComputeRPSTensor(y_pred_base,y_validation))
+loss_validation_base_M6Dataset <- sapply(1:max(ValidationRowsM6Dataset), function(i) {
+  as.array(ComputeRPSTensor(y_pred_base[which(ValidationRowsM6Dataset == i)], y_validation[which(ValidationRowsM6Dataset == i)]))
+})
+
+# lapply(1:max(ValidationRowsM6Dataset), function(i) {
+#   temp <- as.array(ComputeRPSTensorVector(y_pred_base[which(ValidationRowsM6Dataset == i)], y_validation[which(ValidationRowsM6Dataset == i)]))
+#   # temp <- as.array(ComputeRPSTensorVector(torch_tensor(matrix(0.2,nrow <- length(which(ValidationRowsM6Dataset == i)),ncol=5)), y_validation[which(ValidationRowsM6Dataset == i)]))
+#   info <- StocksAggr[ValidationRows][ValidationRowsM6Dataset==i,.(Interval,IntervalStart, IntervalEnd, Ticker, Shift, ETF, Return, ReturnQuintile)]
+#   info[,RPS:= temp]
+#   # info[,.(mRPS = mean(RPS)),.(Ticker,ETF>0)][order(mRPS)]
+#   info[,.(mRPS = mean(RPS),.N),.(ETF>0)][order(ETF)]
+# })
+
 
 # metaModel ---------------------------------------------------------------
 
 metaModel <- MetaModel(baseModel, xtype_train, mesaParameterSize = 1)
-minibatch <- function() {minibatchSampler(10,xtype_train)}
+minibatch <- function() {minibatchSampler(100,xtype_train)}
 train <- list(y_train, x_train, xtype_train)
 test <- list(y_test, x_test, xtype_test)
 
@@ -139,7 +171,18 @@ if(T){
 }
 y_pred_meta <- metaModel(x_validation, xtype_validation)
 loss_validation_meta <- as.array(ComputeRPSTensor(y_pred_meta,y_validation))
+loss_validation_meta_M6Dataset <- sapply(1:max(ValidationRowsM6Dataset), function(i) {
+  as.array(ComputeRPSTensor(y_pred_meta[which(ValidationRowsM6Dataset == i)], y_validation[which(ValidationRowsM6Dataset == i)]))
+})
 
+
+# lapply(1:max(ValidationRowsM6Dataset), function(i) {
+#   temp <- as.array(ComputeRPSTensorVector(y_pred_meta[which(ValidationRowsM6Dataset == i)], y_validation[which(ValidationRowsM6Dataset == i)]))
+#   info <- StocksAggr[ValidationRows][ValidationRowsM6Dataset==i,.(Interval,IntervalStart, IntervalEnd, Ticker, Shift, ETF, Return, ReturnQuintile)]
+#   info[,RPS:= temp]
+#   # info[,.(mRPS = mean(RPS)),.(Ticker,ETF>0)][order(mRPS)]
+#   info[,.(mRPS = mean(RPS),.N),.(ETF>0)][order(ETF)]
+# })
 
 
 # temp <- as.data.table(cbind(as.array(y_validation),round(as.array(y_pred_meta),3), return=round(StocksAggr[ValidationRows]$Return, 3)))
@@ -152,7 +195,7 @@ mesaModelsProgress <- vector(mode = "list", length = J)
 loss_validation_mesa <- rep(NA,J)
 
 for (j in seq_len(J)){
-  if(j %% 10 == 0){
+  if(j %% 100 == 0){
     print(str_c("j: ", j, " Time:", Sys.time()))
   }
   mesaModel <- metaModel$MesaModel(metaModel)()
@@ -167,7 +210,8 @@ for (j in seq_len(J)){
   y_validation_subset <- y_validation[rows_validation,]
 
   # train <- list(y_train_subset, x_train_subset)
-  train <- list(torch_cat(list(y_train_subset, y_test_subset), 1), torch_cat(list(x_train_subset, x_test_subset), 1))
+  # train <- list(torch_cat(list(y_train_subset, y_test_subset), 1), torch_cat(list(x_train_subset, x_test_subset), 1))
+  train <- list(y_test_subset, x_test_subset)
   test <- list(y_test_subset, x_test_subset)
 
   if(nrow(train[[1]])>0){
@@ -184,16 +228,46 @@ temp <- rbind(
   melt(baseModelProgress[1:which.min(loss_test)],id.vars = "epoch")[,type := "base"],
   melt(metaModelProgress[1:which.min(loss_test)],id.vars = "epoch")[,epoch := epoch + baseModelProgress[,which.min(loss_test)]][,type := "meta"]
 )
-temp_validation <- data.table(
-  epoch = c(temp[type=="base",max(epoch)], temp[type=="meta",max(epoch)], temp[type=="meta",max(epoch)]+1),
-  variable = "loss_validation",
-  value = c(loss_validation_base, loss_validation_meta, mean(loss_validation_mesa)),
-  type = c("base", "meta", "mesa")
+temp_validation <- rbind(
+  data.table(
+    epoch = c(temp[type=="base",max(epoch)], temp[type=="meta",max(epoch)], temp[type=="meta",max(epoch)]+1),
+    variable = "loss_validation",
+    value = c(loss_validation_base, loss_validation_meta, mean(loss_validation_mesa)),
+    type = c("base", "meta", "mesa"),
+    subset = "all"
+  ),
+  rbind(
+    data.table(
+      epoch = temp[type=="base",max(epoch)],
+      variable = "loss_validation",
+      value = loss_validation_base_M6Dataset,
+      type = c("base"),
+      subset = seq_along(loss_validation_base_M6Dataset)
+    ),
+    data.table(
+      epoch = temp[type=="meta",max(epoch)],
+      variable = "loss_validation",
+      value = loss_validation_meta_M6Dataset,
+      type = c("meta"),
+      subset = seq_along(loss_validation_meta_M6Dataset)
+    ),
+    data.table(
+      epoch = temp[type=="meta",max(epoch)]+1,
+      variable = "loss_validation",
+      value = sapply(seq_along(loss_validation_meta_M6Dataset), function(i) {mean(loss_validation_mesa[xtype_factor_M6Dataset$M6Dataset==i])}),
+      type = c("mesa"),
+      subset = seq_along(loss_validation_meta_M6Dataset)
+    )
+  )
 )
+
+
 ggplot(temp, aes(x = epoch, y = value, colour =variable, shape=type))+
   geom_line(aes(linetype = type))+
-  geom_point(data=temp_validation)+
-  geom_text(data=temp_validation, aes(label=round(value,4)), hjust = 0.5, vjust = -1, size=2.2)+
+  geom_point(data=temp_validation[subset=="all"])+
+  geom_text(data=temp_validation[subset=="all"], aes(label=round(value,4)), hjust = -0.5, vjust = .2, size=1.9)+
+  geom_text(data=temp_validation[subset!="all"], aes(label=subset), hjust = 0.5, vjust = 0.3, size=1.9)+
+  geom_text(data=temp_validation[subset=="1"], aes(label=round(value,4)), hjust = -0.5, vjust = .2, size=1.9)+
   coord_cartesian(ylim = c(0.145, 0.16))+
   geom_hline(yintercept = 0.16, alpha=0.5)
 
