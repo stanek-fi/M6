@@ -91,8 +91,8 @@ minibatchSampler = function(batchSize, xtype_train){
 
 
 # optimizeModel <- function(model, y_train, x_train, xtype_train, y_test, x_test, xtype_test, criterion, epochs = 10, minibatch = Inf, tempFilePath = NULL, patience = 1, printEvery = Inf){
-trainModel <- function(model, train, test, criterion, epochs = 10, minibatch = Inf, tempFilePath = NULL, patience = 1, printEvery = Inf, lr = 0.001){
-  optimizer = optim_adam(model$parameters, lr = lr)
+trainModel <- function(model, train, test, criterion, epochs = 10, minibatch = Inf, tempFilePath = NULL, patience = 1, printEvery = Inf, lr = 0.001, weight_decay = 0){
+  optimizer = optim_adam(model$parameters, lr = lr, weight_decay = weight_decay)
   progress <- data.table(
     epoch = seq_len(epochs),
     loss_train = as.numeric(rep(NA, epochs)),

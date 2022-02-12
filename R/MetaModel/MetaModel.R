@@ -43,7 +43,7 @@ prepareBaseModel <- function(baseModel, x) {
 
 
 MetaModel = nn_module(
-  initialize = function(baseModel, xtype, mesaParameterSize = 1) {
+  initialize = function(baseModel, xtype, mesaParameterSize = 1, allowBias = T, pDropout = 0) {
     self$fforward <- baseModel$fforward
     self$stateStructure <- baseModel$stateStructure
     self$flattenState <- baseModel$flattenState
@@ -52,38 +52,48 @@ MetaModel = nn_module(
     self$stateSize <- baseModel$stateSize
     self$xtypeSize <- ncol(xtype)
     self$mesaParameterSize <- mesaParameterSize
-    
+    self$allowBias <- allowBias
     self$mesaLayerWeight <- nn_parameter(torch_tensor(matrix(0, nrow = self$mesaParameterSize, ncol = self$xtypeSize), dtype = torch_float()))
     self$metaLayer <- nn_linear(mesaParameterSize, baseModel$stateSize, bias = F)
-    self$metaLayerBias <- nn_parameter(torch_tensor(as.array(self$flattenState(baseModel$state_dict())), dtype = torch_float())) #nasty trick to make it leaf
+    if(self$allowBias){
+      self$metaLayerBias <- nn_parameter(torch_tensor(rep(0, self$stateSize), dtype = torch_float()))
+    }
+    self$baseState <- as.array(self$flattenState(baseModel$state_dict())) #storing it array to avoid odd ourside reference error. Update...it is caused by inbaility to conect references after saving the model...probably not worth fixing
+    self$dropout <- nn_dropout(p = pDropout)
   },
   
   forward = function(x,xtype) {
     xout <- torch_zeros(nrow(x),self$outputSize)
     iscoalesced = try({xtype$is_coalesced()},silent = T)
+    baseState <- torch_tensor(self$baseState)
     
     if(iscoalesced == TRUE){
       columns <- xtype$indices()[2,]
       uniqueColumns <- unique(as.array(columns))
       for(i in uniqueColumns){
         indices <- columns == i
-        # xtypei <- torch_tensor(array(replace(numeric(xtype$size(2)), i + 1, 1), dim=c(1, xtype$size(2))))
         xtypei <- torch_tensor(replace(numeric(xtype$size(2)), i + 1, 1)) #must add one to correct for zero indexing
         mesaState <- nnf_linear(xtypei, self$mesaLayerWeight)
-        metaStateFlat <-  self$metaLayerBias + self$metaLayer(mesaState)
+        if(self$allowBias){
+          metaStateFlatDiff <- self$metaLayerBias + self$metaLayer(mesaState)
+        }else{
+          metaStateFlatDiff <- self$metaLayer(mesaState)
+        }
+        metaStateFlat <-  baseState + self$dropout(metaStateFlatDiff)
         metaState <- self$unflattenState(metaStateFlat, self$stateStructure)
         xout[indices] <- self$fforward(x[indices,],metaState)
       }
     }else{
-      for(i in seq_len(ncol(xtype))){
-        indices <- xtype[,i]>0
-        if(as.numeric(indices$max())>0){
-          mesaState <- nnf_linear(xtype[indices,][1,], self$mesaLayerWeight)
-          metaStateFlat <-  self$metaLayerBias + self$metaLayer(mesaState)
-          metaState <- self$unflattenState(metaStateFlat, self$stateStructure)
-          xout[indices] <- self$fforward(x[indices,],metaState)
-        }
-      }
+      # for(i in seq_len(ncol(xtype))){
+      #   indices <- xtype[,i]>0
+      #   if(as.numeric(indices$max())>0){
+      #     mesaState <- nnf_linear(xtype[indices,][1,], self$mesaLayerWeight)
+      #     metaStateFlat <-  self$metaLayerBias + self$metaLayer(mesaState)
+      #     metaState <- self$unflattenState(metaStateFlat, self$stateStructure)
+      #     xout[indices] <- self$fforward(x[indices,],metaState)
+      #   }
+      # }
+      stop("Currently works only with sparse xtype.")
     }
 
     xout
@@ -100,14 +110,23 @@ MetaModel = nn_module(
         self$unflattenState <- metaModel$unflattenState
         self$flattenState <- metaModel$flattenState
         self$mesaParameterSize <- metaModel$mesaParameterSize
-        self$metaLayerBias <- torch_tensor(as.array(metaState$metaLayerBias),dtype = torch_float()) #nasty trick to make it leaf
+        self$allowBias <- metaModel$allowBias
+        if(self$allowBias){
+          self$metaLayerBias <- torch_tensor(as.array(metaState$metaLayerBias),dtype = torch_float()) #nasty trick to make it leaf
+        }
         self$metaLayerWeight <- torch_tensor(as.array(metaState$metaLayer.weight),dtype = torch_float()) #nasty trick to make it leaf
-        
+        self$baseState <- metaModel$baseState
         self$mesaState <- nn_parameter(torch_tensor(rep(0, self$mesaParameterSize), dtype = torch_float()))
       },
       forward = function(x) {
         mesaState <- self$mesaState
-        metaStateFlat <-  self$metaLayerBias + nnf_linear(mesaState,self$metaLayerWeight)
+        baseState <- torch_tensor(self$baseState)
+        if(self$allowBias){
+          metaStateFlatDiff <- self$metaLayerBias + nnf_linear(mesaState,self$metaLayerWeight)
+        }else{
+          metaStateFlatDiff <- nnf_linear(mesaState,self$metaLayerWeight)
+        }
+        metaStateFlat <-  baseState + metaStateFlatDiff
         metaState <- self$unflattenState(metaStateFlat, self$stateStructure)
         self$fforward(x,metaState)
       }

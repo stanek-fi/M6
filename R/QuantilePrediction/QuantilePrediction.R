@@ -216,7 +216,7 @@ for (j in seq_len(J)){
   test <- list(y_test_subset, x_test_subset)
 
   if(nrow(train[[1]])>0){
-    fit <- trainModel(model = mesaModel, train, test, criterion, epochs = 20, minibatch = Inf, tempFilePath = NULL, patience = Inf, printEvery = Inf)
+    fit <- trainModel(model = mesaModel, train, test, criterion, epochs = 100, minibatch = Inf, tempFilePath = NULL, patience = Inf, printEvery = Inf)
     mesaModel <- fit$model
     mesaModelsProgress[[j]] <- fit$progress
   }
@@ -296,8 +296,8 @@ ggplot(temp, aes(x = epoch, y = value, colour =variable, shape=type))+
 
 
 # cbind(as.array(y_validation),round(as.array(y_pred),3))
-# mesaStates1 <- as.vector(as.array(metaModel$state_dict()$mesaLayerWeight))
-# mesaStates2 <- sapply(mesaModels, function(x) as.array(x$state_dict()$mesaState))
-# ggplot(data.table(mesaStates1,mesaStates2),aes(x=mesaStates1,mesaStates2))+
-#   geom_point()
+mesaStates1 <- as.vector(as.array(metaModel$state_dict()$mesaLayerWeight))
+mesaStates2 <- sapply(mesaModels, function(x) as.array(x$state_dict()$mesaState))
+ggplot(data.table(mesaStates1,mesaStates2),aes(x=mesaStates1,mesaStates2))+
+  geom_point()
 
