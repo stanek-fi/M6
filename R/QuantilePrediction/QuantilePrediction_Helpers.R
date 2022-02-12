@@ -91,8 +91,8 @@ minibatchSampler = function(batchSize, xtype_train){
 
 
 # optimizeModel <- function(model, y_train, x_train, xtype_train, y_test, x_test, xtype_test, criterion, epochs = 10, minibatch = Inf, tempFilePath = NULL, patience = 1, printEvery = Inf){
-trainModel <- function(model, train, test, criterion, epochs = 10, minibatch = Inf, tempFilePath = NULL, patience = 1, printEvery = Inf){
-  optimizer = optim_adam(model$parameters, lr = 0.01)
+trainModel <- function(model, train, test, criterion, epochs = 10, minibatch = Inf, tempFilePath = NULL, patience = 1, printEvery = Inf, lr = 0.001){
+  optimizer = optim_adam(model$parameters, lr = lr)
   progress <- data.table(
     epoch = seq_len(epochs),
     loss_train = as.numeric(rep(NA, epochs)),
@@ -108,6 +108,7 @@ trainModel <- function(model, train, test, criterion, epochs = 10, minibatch = I
       mbs <- minibatch()
     }
     
+    model$train()
     for(mb in seq_along(mbs)){
       rows <- mbs[[mb]]
       # x_train_mb <- subsetTensor(x_train, rows = rows)
@@ -125,6 +126,7 @@ trainModel <- function(model, train, test, criterion, epochs = 10, minibatch = I
       loss$backward()
       optimizer$step()
     }
+    model$eval()
     
     # loss_train_e <- as.array(criterion(model(x_train,xtype_train), y_train))
     loss_train_e <- as.array(criterion(do.call(model, train[-1]), train[[1]]))
@@ -182,18 +184,50 @@ trainModel <- function(model, train, test, criterion, epochs = 10, minibatch = I
 # )
 
   
+# constructFFNN = nn_module(
+#   initialize = function(inputSize, layerSizes, layerTransforms) {
+#     self$layerSizes <- layerSizes
+#     self$layerTransforms <- layerTransforms
+#     self$layerSizesAll <- c(inputSize, layerSizes)
+#     for(i in seq_along(self$layerSizes)){
+#       self[[str_c("layer_",i)]] <- nn_linear(self$layerSizesAll[i], self$layerSizesAll[i+1])
+#     }
+#   },
+#   forward = function(x) {
+#     for(i in seq_along(self$layerSizes)){
+#       x <- self$layerTransforms[[i]](self[[str_c("layer_",i)]](x))
+#     }
+#     x
+#   },
+#   fforward = function(x,state){
+#     for(i in seq_along(self$layerSizes)){
+#       x <- self$layerTransforms[[i]](nnf_linear(x, weight = state[[str_c("layer_",i,".weight")]], bias = state[[str_c("layer_",i,".bias")]]))
+#     }
+#     x
+#   }
+# )
+
 constructFFNN = nn_module(
-  initialize = function(inputSize, layerSizes, layerTransforms) {
+  initialize = function(inputSize, layerSizes, layerTransforms, layerDropouts = NULL) {
     self$layerSizes <- layerSizes
     self$layerTransforms <- layerTransforms
     self$layerSizesAll <- c(inputSize, layerSizes)
+    self$Dropout <- !is.null(layerDropouts)
     for(i in seq_along(self$layerSizes)){
       self[[str_c("layer_",i)]] <- nn_linear(self$layerSizesAll[i], self$layerSizesAll[i+1])
+    }
+    if(self$Dropout){
+      for(i in seq_along(self$layerSizes)){
+        self[[str_c("layerDropout_",i)]] <- nn_dropout(p=layerDropouts[i])
+      }
     }
   },
   forward = function(x) {
     for(i in seq_along(self$layerSizes)){
       x <- self$layerTransforms[[i]](self[[str_c("layer_",i)]](x))
+      if(self$Dropout){
+        x <- self[[str_c("layerDropout_",i)]](x)
+      }
     }
     x
   },
@@ -204,8 +238,6 @@ constructFFNN = nn_module(
     x
   }
 )
-
-
 
 
 GenStocksAggr <- function(Stocks, IntervalInfos, featureList, M6Datasets, CheckLeakage = T){

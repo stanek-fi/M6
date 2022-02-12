@@ -1,12 +1,15 @@
 prepareBaseModel <- function(baseModel, x) {
   state <- baseModel$state_dict()
   
+  baseModel$eval()
   output <- baseModel(x)
   outputControl <- baseModel$fforward(x,state)
   meanDiff <- as.array(mean(abs(output - outputControl)))
   if(meanDiff>1e-10){
     stop("Supplied fforward method of the baseModel does not match the forward method.")
   }
+  baseModel$train()
+  
   baseModel$outputSize <- output$size(2)
   
   baseModel$stateStructure <- rapply(state, function(x) dim(x), how = "list")
