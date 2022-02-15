@@ -61,15 +61,17 @@ StocksAggr <- StocksAggr[order(IntervalStart,Ticker)]
 
 # TrainStart <- as.Date("1990-01-01")
 # TrainStart <- as.Date("1990-01-01")
-TrainStart <- as.Date("2010-01-01")
-TrainEnd <- as.Date("2019-01-01")
+# TrainStart <- as.Date("2010-01-01")
+TrainStart <- as.Date("2000-01-01")
+TrainEnd <- as.Date("2021-01-01")
+
 # TrainEnd <- as.Date("2021-01-01")
 # ValidationStart <- as.Date("2020-01-01")
 # ValidationEnd <- as.Date("2021-01-01")
 ValidationStart <- as.Date("2021-01-01")
-
+ValidationEnd <- as.Date("2022-01-01")
 # ValidationStart <- IntervalInfos[[1]]$IntervalStarts[length(IntervalInfos[[1]]$IntervalStarts) - (12 - Submission) - 1]
-ValidationEnd <- IntervalInfos[[1]]$IntervalEnds[length(IntervalInfos[[1]]$IntervalEnds) - (12 - Submission) - 1]
+# ValidationEnd <- IntervalInfos[[1]]$IntervalEnds[length(IntervalInfos[[1]]$IntervalEnds) - (12 - Submission) - 1]
 
 
 
@@ -113,7 +115,9 @@ criterion = function(y_pred,y) {ComputeRPSTensor(y_pred,y)}
 
 inputSize <- length(featureNames)
 # layerSizes <- c(32, 5)
+# layerSizes <- c(32, 8, 5)
 layerSizes <- c(32, 8, 5)
+# layerSizes <- c(32, 8, 5)
 # layerSizes <- c(64, 32, 8, 5)
 # layerSizes <- c(100, 5)
 layerDropouts <- c(rep(0.2, length(layerSizes)-1),0)
@@ -125,7 +129,7 @@ test <- list(y_test, x_test)
 
 if(T){
   start <- Sys.time()
-  fit <- trainModel(model = baseModel, train, test, criterion, epochs = 500, minibatch = 500, tempFilePath = tempFilePath, patience = 5, printEvery = 1)
+  fit <- trainModel(model = baseModel, train, test, criterion, epochs = 100, minibatch = 1000, tempFilePath = tempFilePath, patience = 5, printEvery = 1)
   Sys.time() - start 
   baseModel <- fit$model
   baseModelProgress <- fit$progress
@@ -153,7 +157,7 @@ loss_validation_base_M6Dataset <- sapply(1:max(ValidationRowsM6Dataset), functio
 
 # metaModel ---------------------------------------------------------------
 
-metaModel <- MetaModel(baseModel, xtype_train, mesaParameterSize = 1)
+metaModel <- MetaModel(baseModel, xtype_train, mesaParameterSize = 1, allowBias = F, pDropout = 0.05)
 minibatch <- function() {minibatchSampler(100,xtype_train)}
 train <- list(y_train, x_train, xtype_train)
 test <- list(y_test, x_test, xtype_test)

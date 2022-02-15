@@ -14,8 +14,9 @@ NTrain <- 100
 NTest <- 10
 NValidation <- 5000
 M <- 100
-
-thetas <- lapply(1:M, function(x) {max(rnorm(1,1,0.3),0)})
+sd <- 2
+minLoss <- sd^2
+thetas <- lapply(1:M, function(x) {max(rnorm(1,1,0.1),0)})
 
 f <- function(x,theta){
   # x %*% theta
@@ -24,8 +25,8 @@ f <- function(x,theta){
   sin(x*theta)
 }
 DGP <- function(N, theta, xtype){
-  x <- matrix(pmax(rnorm(N*K,2,1),0),ncol=K)
-  y <- f(x,theta) + rnorm(nrow(x),0,1)
+  x <- matrix(rnorm(N*K,2,1),ncol=K)
+  y <- f(x,theta) + rnorm(nrow(x),0,sd)
   xtype <- rep(xtype, nrow(x))
   return(list(
     y = y,
@@ -56,46 +57,60 @@ validation <- ConvertToTensor(DataValidation)
 criterion = function(y_pred,y) {mean((y_pred-y)^2)}
 
 
-# baseModel --------------------------------------------------------------
+# i <- 1
+# ggplot(data.frame(x=DataValidation[[i]]$x, y=DataValidation[[i]]$y), aes(x=x,y=y))+
+#   geom_point(alpha=.1)+
+#   geom_point(data=data.frame(x=DataTrain[[i]]$x,y=DataTrain[[i]]$y), aes(x=x,y=y), colour="red")+
+#   geom_line(data=data.frame(x=DataValidation[[i]]$x, y=f(DataValidation[[i]]$x, thetas[[i]])))+
+#   ggtitle(round(thetas[[i]], 4))
 
+# baseModel --------------------------------------------------------------
+R <- 10
+out <- rep(NA,R)
+for(r in 1:R){
+  
 inputSize <- K
 # layerSizes <- c(1)
 layerSizes <- c(64,8,1)
 # layerSizes <- c(8,1)
-# layerDropouts <- c(rep(0.0, length(layerSizes)-1),0)
-layerDropouts <- NULL
+layerDropouts <- c(rep(0.1, length(layerSizes)-1),0)
+# layerDropouts <- NULL
 layerTransforms <- c(lapply(seq_len(length(layerSizes)-1), function(x) nnf_relu), list(function(x) {x}))
 baseModel <- constructFFNN(inputSize, layerSizes, layerTransforms, layerDropouts)
 baseModel = prepareBaseModel(baseModel,x = train$x)
 
-lr = 0.01
+lr = 0.001
 weight_decay = 0
-fit <- trainModel(model = baseModel, train[1:2], test[1:2], criterion, epochs = 500, minibatch = 100, tempFilePath = tempFilePath, patience = 5, printEvery = 10, lr = lr, weight_decay = weight_decay)
+fit <- trainModel(model = baseModel, train[1:2], test[1:2], criterion, epochs = 500, minibatch = 100, tempFilePath = tempFilePath, patience = 5, printEvery = Inf, lr = lr, weight_decay = weight_decay)
 baseModel <- fit$model
 baseModelProgress <- fit$progress
 y_pred_base <- baseModel(validation$x)
 loss_validation_base <- as.array(criterion(y_pred_base,validation$y))
-loss_validation_base
-
-# baseModel$state_dict()
+message(round(loss_validation_base,4))
+out[r] <- round(loss_validation_base,4)
+}
+mean(out)
 
 # metaModel ---------------------------------------------------------------
+R <- 10
+out <- rep(NA,R)
+for(r in 1:R){
+metaModel <- MetaModel(baseModel, train$xtype, mesaParameterSize = 1, allowBias = T, pDropout = 0)
+minibatch <- function() {minibatchSampler(100,train$xtype)}
 
-metaModel <- MetaModel(baseModel, train$xtype, mesaParameterSize = 1, allowBias = T, pDropout = 0.2)
-minibatch <- function() {minibatchSampler(10,train$xtype)}
-
-lr = 0.001
+lr = 0.01
 weight_decay = 0
 # weight_decay = 1e-5
 # weight_decay = 10
-fit <- trainModel(model = metaModel, train, test, criterion, epochs = 100, minibatch = minibatch, tempFilePath = tempFilePath, patience = 5, printEvery = 1, lr = lr , weight_decay = weight_decay)
+fit <- trainModel(model = metaModel, train, test, criterion, epochs = 200, minibatch = minibatch, tempFilePath = tempFilePath, patience = 5, printEvery = Inf, lr = lr , weight_decay = weight_decay)
 metaModel <- fit$model
 metaModelProgress <- fit$progress
 y_pred_meta <- metaModel(validation$x, validation$xtype)
 loss_validation_meta <- as.array(criterion(y_pred_meta,validation$y))
-loss_validation_meta
-
-# metaModel$state_dict()
+message(str_c(round(loss_validation_meta,4), " ", round((loss_validation_meta - loss_validation_base)/(loss_validation_base - minLoss),4)))
+out[r] <- round((loss_validation_meta - loss_validation_base)/(loss_validation_base - minLoss),4)
+}
+mean(out)
 
 # mesaModels --------------------------------------------------------------
 J <- M
@@ -128,15 +143,14 @@ loss_validation_mesa
 
 # analysis ----------------------------------------------------------------
 
-minLoss <- 1
-loss_validation_base
-loss_validation_meta
-loss_validation_mesa
+message(round(loss_validation_base,4))
+message(round(loss_validation_meta,4))
+message(round(loss_validation_mesa,4))
 # (loss_validation_base - minLoss)/minLoss
 # (loss_validation_meta - minLoss)/minLoss
 # (loss_validation_mesa - minLoss)/minLoss
-(loss_validation_meta - loss_validation_base)/(loss_validation_base - minLoss)
-(loss_validation_mesa - loss_validation_base)/(loss_validation_base - minLoss)
+message(round((loss_validation_meta - loss_validation_base)/(loss_validation_base - minLoss),4))
+message(round((loss_validation_mesa - loss_validation_base)/(loss_validation_base - minLoss),4))
 
 
 mesaStatesMeta <- as.vector(as.array(metaModel$state_dict()$mesaLayerWeight))
