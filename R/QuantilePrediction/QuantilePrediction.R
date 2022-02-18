@@ -14,8 +14,8 @@ source("R/MetaModel/MetaModel.R")
 featureList <- c(
   list(
     function(SD, BY) {Return(SD)}, #first is just return for y generation
-    function(SD, BY) {LagVolatility(SD, lags = 1:5)},
-    function(SD, BY) {LagReturn(SD, lags = 1:5)},
+    function(SD, BY) {LagVolatility(SD, lags = 1:12)},
+    function(SD, BY) {LagReturn(SD, lags = 1:12)},
     function(SD, BY) {IsETF(SD, BY, StockNames = StockNames)}
   ),
   TTR

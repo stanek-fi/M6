@@ -28,22 +28,22 @@ Stocks <- do.call(rbind,lapply(seq_along(Stocks), function(s) {
 
 
 library(TTR)
-library(fTrading)
+# library(fTrading)
 
 
-s <- 1
-IntervalInfo <- IntervalInfos[[1]]
-colnamesStock <- c("index", "Open", "High", "Low", "Close", "Volume", "Adjusted")
-Stock <- Stocks[[s]]
-Ticker <- names(Stocks)[s]
-colnames(Stock) <- colnamesStock
-Stock <- AugmentStock(Stock[index>=IntervalInfo$Start & index<=IntervalInfo$End], IntervalInfo$End)
-Stock[,Interval := findInterval(index,IntervalInfo$TimeBreaks,left.open=T)]
-Stock[,Interval := factor(Interval, levels = seq_along(IntervalInfo$IntervalNames), labels = IntervalInfo$IntervalNames)]
-Stock[,Ticker := Ticker]
-SD <- Stock
+# s <- 1
+# IntervalInfo <- IntervalInfos[[1]]
+# colnamesStock <- c("index", "Open", "High", "Low", "Close", "Volume", "Adjusted")
+# Stock <- Stocks[[s]]
+# Ticker <- names(Stocks)[s]
+# colnames(Stock) <- colnamesStock
+# Stock <- AugmentStock(Stock[index>=IntervalInfo$Start & index<=IntervalInfo$End], IntervalInfo$End)
+# Stock[,Interval := findInterval(index,IntervalInfo$TimeBreaks,left.open=T)]
+# Stock[,Interval := factor(Interval, levels = seq_along(IntervalInfo$IntervalNames), labels = IntervalInfo$IntervalNames)]
+# Stock[,Ticker := Ticker]
+# SD <- Stock
 
-# SD <- Stocks[Ticker == "AVB"]
+SD <- Stocks[Ticker == "AVB"]
 
 #ADX
 temp <- cbind(SD,ADX(SD[,.(High,Low,Close)]))
@@ -285,6 +285,15 @@ temp[,time:= as.Date(str_sub(Interval, 1, 10))]
 ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
   geom_line()
 
+temp <- TTRWrapper(SD = SD, f = DEMA, SDcols = c("Close"), Normalize = T, SDcolsOut = "DEMA", n=10)
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+temp <- TTRWrapper(SD = SD, f = DEMA, SDcols = c("Close"), Normalize = T, SDcolsOut = "DEMA", n=40)
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
 temp <- TTRWrapper(SD = SD, f = WMA, SDcols = c("Close"), Normalize = T, SDcolsOut = "WMA")
 temp[,time:= as.Date(str_sub(Interval, 1, 10))]
 ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
@@ -328,7 +337,7 @@ temp[,time:= as.Date(str_sub(Interval, 1, 10))]
 ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
   geom_line()
 
-temp <- TTRWrapper(SD = SD, f = SMI, SDcols = c("High", "Low", "Close"), Normalize = F)
+temp <- TTRWrapper(SD = SD, f = SMI, SDcols = c("High", "Low", "Close"), Normalize = F,  n = 60)
 temp[,time:= as.Date(str_sub(Interval, 1, 10))]
 ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
   geom_line()
@@ -341,6 +350,12 @@ ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour 
 
 
 temp <- TTRWrapper(SD = SD, f = TRIX, SDcols = c("Adjusted"), Normalize = F)
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+
+temp <- TTRWrapper(SD = SD, f = TRIX, SDcols = c("Adjusted"), Normalize = F, n = 40, Aggreagation = "last")
 temp[,time:= as.Date(str_sub(Interval, 1, 10))]
 ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
   geom_line()
@@ -363,11 +378,30 @@ ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour 
   geom_line()
 
 
-temp <- TTRWrapper(SD = SD, f = volatility, SDcols = c("Open", "High", "Low", "Close"), Normalize = F, SDcolsOut = "volatility", calc = "garman.klass")
+temp <- TTRWrapper(SD = SD, f = TTR::volatility, SDcols = c("Open", "High", "Low", "Close"), Normalize = F, SDcolsOut = "volatility", calc = "garman.klass")
 temp[,time:= as.Date(str_sub(Interval, 1, 10))]
 ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
   geom_line()
 
+temp <- TTRWrapper(SD = SD, f = TTR::volatility, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "volatility", n = 10)
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = TTR::volatility, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "volatility", n = 20)
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = TTR::volatility, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "volatility", n = 40)
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
+temp <- TTRWrapper(SD = SD, f = TTR::volatility, SDcols = c("Adjusted"), Normalize = F, SDcolsOut = "volatility", n = 100)
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
 
 
 temp <- TTRWrapper(SD = SD, f = williamsAD, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsOut = "williamsAD", Transform = list(function(x) c(NA,diff(x))))
@@ -382,10 +416,14 @@ temp[,time:= as.Date(str_sub(Interval, 1, 10))]
 ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
   geom_line()
 
-temp <- TTRWrapper(SD = SD, f = ZigZag, SDcols = c("High", "Low", "Close"), Normalize = T, SDcolsOut = "ZigZag")
+temp <- TTRWrapper(SD = SD, f = ZigZag, SDcols = c("High", "Low", "Close"), Normalize = T, SDcolsOut = "ZigZag", Aggreagation = "last")
 temp[,time:= as.Date(str_sub(Interval, 1, 10))]
 ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
   geom_line()
+
+
+
+
 
 
 
