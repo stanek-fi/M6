@@ -12,6 +12,37 @@ source("R/QuantilePrediction/QuantilePrediction_Models.R")
 source("R/MetaModel/MetaModel.R")
 
 
+# featureList <- c(
+#   list(
+#     function(SD, BY) {Return(SD)}, #first is just return for y generation
+#     function(SD, BY) {LagVolatility(SD, lags = 1:5)},
+#     function(SD, BY) {LagReturn(SD, lags = 1:5)},
+#     function(SD, BY) {IsETF(SD, BY, StockNames = StockNames)}
+#   ),
+#   TTR
+# )
+# 
+# # Shifts <- c(0)
+# Shifts <- c(0,7,14,21)
+# # Shifts <- c(0,7)
+# Submission = 0
+# IntervalInfos <- GenIntervalInfos(Submission = Submission, Shifts = Shifts)
+# 
+# 
+# GenerateStockAggr <- F
+# if(GenerateStockAggr){
+#   StockNames <- readRDS(file.path("Data","StockNames.RDS"))
+#   Stocks <- readRDS(file.path("Data","StocksM6.RDS"))
+#   # Stocks <- readRDS(file.path("Data","StocksAll.RDS"))
+#   # SP500Tickers <- sample(StockNames[SP500==TRUE,Symbol],100)
+#   # ETFTickers <- sample(StockNames[ETF==TRUE,Symbol],0)
+#   # Stocks <- Stocks[c(SP500Tickers,ETFTickers)]
+#   StocksAggr <- GenStocksAggr(Stocks, IntervalInfos, featureList, CheckLeakage = F)
+#   saveRDS(StocksAggr, file.path("Precomputed","StocksAggr.RDS"))
+# }else{
+#   StocksAggr <- readRDS(file.path("Precomputed","StocksAggr.RDS"))
+# }
+
 featureList <- c(
   list(
     function(SD, BY) {Return(SD)}, #first is just return for y generation
@@ -22,43 +53,39 @@ featureList <- c(
   TTR
 )
 
-# Shifts <- c(0)
 Shifts <- c(0,7,14,21)
-# Shifts <- c(0,7)
 Submission = 0
 IntervalInfos <- GenIntervalInfos(Submission = Submission, Shifts = Shifts)
-
 
 GenerateStockAggr <- F
 if(GenerateStockAggr){
   StockNames <- readRDS(file.path("Data","StockNames.RDS"))
-  Stocks <- readRDS(file.path("Data","StocksM6.RDS"))
-  # Stocks <- readRDS(file.path("Data","StocksAll.RDS"))
-  # SP500Tickers <- sample(StockNames[SP500==TRUE,Symbol],100)
-  # ETFTickers <- sample(StockNames[ETF==TRUE,Symbol],0)
-  # Stocks <- Stocks[c(SP500Tickers,ETFTickers)]
-  StocksAggr <- GenStocksAggr(Stocks, IntervalInfos, featureList, CheckLeakage = F)
+  Stocks <- readRDS(file.path("Data","StocksAll.RDS"))
+  # temp <- StockNames[M6Dataset>0 & M6Dataset<=2][order(M6Dataset),.(Symbol,M6Dataset)]
+  temp <- StockNames[M6Dataset>0][order(M6Dataset),.(Symbol,M6Dataset)]
+  Stocks <- Stocks[temp$Symbol]
+  M6Datasets <- temp$M6Dataset
+  StocksAggr <- GenStocksAggr(Stocks, IntervalInfos, featureList, M6Datasets, CheckLeakage = F)
   saveRDS(StocksAggr, file.path("Precomputed","StocksAggr.RDS"))
 }else{
   StocksAggr <- readRDS(file.path("Precomputed","StocksAggr.RDS"))
 }
 
 
-
-featureNames <- names(StocksAggr)[!(names(StocksAggr) %in% c("Ticker", "Interval", "Return", "Shift", "ReturnQuintile", "IntervalStart", "IntervalEnd"))]
+# featureNames <- names(StocksAggr)[!(names(StocksAggr) %in% c("Ticker", "Interval", "Return", "Shift", "ReturnQuintile", "IntervalStart", "IntervalEnd"))]
+# StocksAggr <- imputeFeatures(StocksAggr, featureNames = featureNames)
+# StocksAggr <- standartizeFeatures(StocksAggr, featureNames = featureNames)
+# StocksAggr <- StocksAggr[order(IntervalStart,Ticker)]
+featureNames <- names(StocksAggr)[!(names(StocksAggr) %in% c("Ticker", "Interval", "Return", "Shift", "M6Dataset", "ReturnQuintile", "IntervalStart", "IntervalEnd"))]
 StocksAggr <- imputeFeatures(StocksAggr, featureNames = featureNames)
 StocksAggr <- standartizeFeatures(StocksAggr, featureNames = featureNames)
-StocksAggr <- StocksAggr[order(IntervalStart,Ticker)]
+StocksAggr <- StocksAggr[order(Ticker,IntervalStart)]
 
 
-# TrainStart <- as.Date("1990-01-01")
-TrainStart <- as.Date("1990-01-01")
-TrainEnd <- as.Date("2019-01-01")
-# TrainEnd <- as.Date("2021-01-01")
+TrainStart <- as.Date("2000-01-01")
+TrainEnd <- as.Date("2020-01-01")
 ValidationStart <- as.Date("2021-01-01")
-# ValidationStart <- as.Date("2021-12-13")
-# ValidationStart <- IntervalInfos[[1]]$IntervalStarts[length(IntervalInfos[[1]]$IntervalStarts) - (12 - Submission) - 1]
-ValidationEnd <- IntervalInfos[[1]]$IntervalEnds[length(IntervalInfos[[1]]$IntervalEnds) - (12 - Submission) - 1]
+ValidationEnd <- as.Date("2022-01-01")
 
 TrainRows <- which(StocksAggr[,(IntervalStart >= TrainStart) & (IntervalEnd <= TrainEnd)])
 TestRows <- which(StocksAggr[,(IntervalStart > TrainEnd) & (IntervalEnd < ValidationStart)])
@@ -96,7 +123,7 @@ xgb_params <- list("objective" = "multi:softprob",
 # Sys.time() - start
 
 start <- Sys.time()
-fit <- xgb.train(params = xgb_params, data = train_matrix, nrounds = 50)
+fit <- xgb.train(params = xgb_params, data = train_matrix, nrounds = 20)
 Sys.time() - start
 
 test_pred <- predict(fit, newdata = validation_matrix)

@@ -52,6 +52,7 @@ standartizeFeatures <- function(StocksAggr, featureNames = NULL){
   StocksAggr[,c(setNames(lapply(otherNames, function(x) get(x)),otherNames), lapply(.SD, function(x) standartize(x))), .(Interval, M6Dataset), .SDcols = featureNames]
 }
 
+
 subsetTensor <- function(x, rows, isSparse = NULL){
   if(is.null(isSparse)){
     isSparse = try({x$is_coalesced()},silent = T)
@@ -91,13 +92,17 @@ minibatchSampler = function(batchSize, xtype_train){
 
 
 # optimizeModel <- function(model, y_train, x_train, xtype_train, y_test, x_test, xtype_test, criterion, epochs = 10, minibatch = Inf, tempFilePath = NULL, patience = 1, printEvery = Inf){
-trainModel <- function(model, train, test, criterion, epochs = 10, minibatch = Inf, tempFilePath = NULL, patience = 1, printEvery = Inf, lr = 0.001, weight_decay = 0){
+trainModel <- function(model, criterion, train, test = NULL, validation = NULL, epochs = 10, minibatch = Inf, tempFilePath = NULL, patience = 1, printEvery = Inf, lr = 0.001, weight_decay = 0, isSparse = NULL){
   optimizer = optim_adam(model$parameters, lr = lr, weight_decay = weight_decay)
   progress <- data.table(
     epoch = seq_len(epochs),
-    loss_train = as.numeric(rep(NA, epochs)),
-    loss_test = as.numeric(rep(NA, epochs))
+    loss_train = rep(Inf, epochs),
+    loss_test = rep(Inf, epochs),
+    loss_validation = rep(Inf, epochs)
   )
+  if(is.null(isSparse)){
+    isSparse <- c(rep(F,2), rep(T,length(train) - 2))
+  }
   
   for(e in 1:epochs){
     
@@ -115,7 +120,6 @@ trainModel <- function(model, train, test, criterion, epochs = 10, minibatch = I
       # y_train_mb <- subsetTensor(y_train, rows = rows)
       # xtype_train_mb <- subsetTensor(xtype_train, rows = rows)
       # train_mb <- lapply(train, function(x) subsetTensor(x, rows = rows))
-      isSparse <- c(rep(F,2), rep(T,length(train) - 2))
       train_mb <- lapply(seq_along(train), function(i) subsetTensor(train[[i]], rows = rows, isSparse = isSparse[i]))
       
       optimizer$zero_grad()
@@ -128,29 +132,31 @@ trainModel <- function(model, train, test, criterion, epochs = 10, minibatch = I
     }
     model$eval()
     
-    # loss_train_e <- as.array(criterion(model(x_train,xtype_train), y_train))
-    loss_train_e <- as.array(criterion(do.call(model, train[-1]), train[[1]]))
-    # loss_test_e <- as.array(criterion(model(x_test,xtype_test), y_test))
-    loss_test_e <- as.array(criterion(do.call(model, test[-1]), test[[1]]))
-    progress[e, loss_train := loss_train_e]
-    progress[e, loss_test := loss_test_e]
+    progress[e, loss_train := as.array(criterion(do.call(model, train[-1]), train[[1]]))]
+    if(!is.null(test)){
+      progress[e, loss_test := as.array(criterion(do.call(model, test[-1]), test[[1]]))]
+    }
+    if(!is.null(validation)){
+      progress[e, loss_validation := as.array(criterion(do.call(model, validation[-1]), validation[[1]]))]
+    }
     if(e %% printEvery == 0){
-      print(str_c("Epoch:", e," loss_train: ", round(progress[e, loss_train], 4)," loss_test:", round(progress[e, loss_test], 5), " Time:", Sys.time()))
+      print(str_c("Epoch:", e," train: ", round(progress[e, loss_train], 5)," test:", round(progress[e, loss_test], 5), " validation:", round(progress[e, loss_validation], 5), " Time:", Sys.time()))
     }
     
-    ebest <- progress[,which.min(loss_test)]
-    
-    if((e == ebest) & !is.null(tempFilePath)){
-      torch_save(model,file.path(tempFilePath,str_c("temp",".t7")))
+    if(!is.null(test)){
+      ebest <- progress[,which.min(loss_test)]
+      if((e == ebest) & !is.null(tempFilePath)){
+        torch_save(model,file.path(tempFilePath,str_c("temp",".t7")))
+      }
+      if(e - ebest >= patience){
+        progress <- progress[1:e,]
+        break()
+      }
     }
     
-    if(e - ebest >= patience){
-      progress <- progress[1:e,]
-      break()
-    }
   }
   
-  if(!is.null(tempFilePath)){
+  if(!is.null(tempFilePath) & !is.null(test)){
     model <- torch_load(file.path(tempFilePath,str_c("temp",".t7")))
     file.remove(file.path(tempFilePath,str_c("temp",".t7")))
   }
@@ -236,6 +242,159 @@ constructFFNN = nn_module(
       x <- self$layerTransforms[[i]](nnf_linear(x, weight = state[[str_c("layer_",i,".weight")]], bias = state[[str_c("layer_",i,".bias")]]))
     }
     x
+  }
+)
+
+
+constructFFNNbn = nn_module(
+  initialize = function(inputSize, layerSizes, layerTransforms, layerDropouts = NULL, layerBatchnorms = NULL) {
+    self$layerSizes <- layerSizes
+    self$layerTransforms <- layerTransforms
+    self$layerSizesAll <- c(inputSize, layerSizes)
+    self$Dropout <- !is.null(layerDropouts)
+    self$layerBatchnorms <- layerBatchnorms
+    for(i in seq_along(self$layerSizes)){
+      self[[str_c("layer_",i)]] <- nn_linear(self$layerSizesAll[i], self$layerSizesAll[i+1])
+    }
+    if(self$Dropout){
+      for(i in seq_along(self$layerSizes)){
+        self[[str_c("layerDropout_",i)]] <- nn_dropout(p=layerDropouts[i])
+      }
+    }
+    if(!is.null(self$layerBatchnorms)){
+      for(i in seq_along(self$layerSizes)){
+        if(self$layerBatchnorms[i]==TRUE){
+          self[[str_c("layerBatchnorm_",i)]] <- nn_batch_norm1d(self$layerSizesAll[i+1], track_running_stats = F)
+        }
+      }
+    }
+  },
+  forward = function(x) {
+    for(i in seq_along(self$layerSizes)){
+      x <- self$layerTransforms[[i]](self[[str_c("layer_",i)]](x))
+      if(!is.null(self$layerBatchnorms) && (self$layerBatchnorms[i] == TRUE)){
+        x <- self[[str_c("layerBatchnorm_",i)]](x)
+      }
+      if(self$Dropout){
+        x <- self[[str_c("layerDropout_",i)]](x)
+      }
+    }
+    x
+  }
+)
+
+
+constructSCNN = nn_module(
+  initialize = function(inputSize, layerSizes, layerTransforms, scfun, scsize, sclags, layerDropouts = NULL) {
+    self$layerSizes <- layerSizes
+    self$layerTransforms <- layerTransforms
+    self$layerSizesAll <- c(inputSize, layerSizes)
+    self$Dropout <- !is.null(layerDropouts)
+    self$scfun <- scfun
+    self$scsize <- scsize
+    self$sclags <- sclags
+    self$sclayer <- nn_linear(self$scsize * self$sclags, self$layerSizesAll[length(self$layerSizesAll)])
+    for(i in seq_along(self$layerSizes)){
+      self[[str_c("layer_",i)]] <- nn_linear(self$layerSizesAll[i], self$layerSizesAll[i+1])
+    }
+    if(self$Dropout){
+      for(i in seq_along(self$layerSizes)){
+        self[[str_c("layerDropout_",i)]] <- nn_dropout(p=layerDropouts[i])
+      }
+    }
+  },
+  forward = function(x,y) {
+    for(i in seq_along(self$layerSizes)){
+      xout <- self[[str_c("layer_",i)]](x)
+      x <- self$layerTransforms[[i]](xout)
+      if(self$Dropout){
+        x <- self[[str_c("layerDropout_",i)]](x)
+      }
+    }
+    ypred <- x
+    sc <- self$scfun(ypred,y)
+    
+    
+    # sclagged <- torch_cat(lapply(1:self$sclags, function(lg) {
+    #   # torch_cat(list(torch_ones(lg,self$scsize) * sc$mean(),sc[1:(sc$size(1)-lg),]), 1)
+    #   torch_cat(list(torch_zeros(lg,self$scsize), sc[1:(sc$size(1)-lg),]), 1)
+    # }), 2)
+    
+    sclagged <- torch_zeros(nrow(x), self$scsize * self$sclags)
+    for(i in 1){
+      indices <- torch_ones(nrow(x), dtype = torch_bool())
+      scsub <- sc[indices,]
+      scsublagged <- torch_cat(lapply(1:self$sclags, function(lg) {
+        torch_cat(list(torch_zeros(lg,self$scsize), sc[1:(scsub$size(1)-lg),]), 1)
+      }), 2)
+      sclagged[indices] <- scsublagged
+    }
+    
+    correction <- self$sclayer(sclagged)
+    ypredsc <- self$layerTransforms[[length(self$layerSizes)]](xout + correction)
+    ypredsc
+  }
+)
+
+constructSCNN2 = nn_module(
+  initialize = function(inputSize, layerSizes, layerTransforms, scfun, scsize, sclags, layerDropouts = NULL) {
+    self$layerSizes <- layerSizes
+    self$layerTransforms <- layerTransforms
+    self$layerSizesAll <- c(inputSize, layerSizes)
+    self$Dropout <- !is.null(layerDropouts)
+    self$scfun <- scfun
+    self$scsize <- scsize
+    self$sclags <- sclags
+    # self$sclayer <- nn_linear(self$scsize * self$sclags, self$layerSizesAll[length(self$layerSizesAll)])
+    self$scweight <- nn_parameter(torch_zeros(self$layerSizesAll[length(self$layerSizesAll)],self$scsize * self$sclags))
+    self$scbn <- nn_batch_norm1d(self$scsize * self$sclags)
+    self$sclayer1 <- nn_linear(self$scsize * self$sclags, 5)
+    self$sclayer2 <- nn_linear(5, 5)
+    self$sclayer3 <- nn_linear(5, self$layerSizesAll[length(self$layerSizesAll)])
+    for(i in seq_along(self$layerSizes)){
+      self[[str_c("layer_",i)]] <- nn_linear(self$layerSizesAll[i], self$layerSizesAll[i+1])
+    }
+    if(self$Dropout){
+      for(i in seq_along(self$layerSizes)){
+        self[[str_c("layerDropout_",i)]] <- nn_dropout(p=layerDropouts[i])
+      }
+    }
+  },
+  forward = function(x,xtype,y) {
+    for(i in seq_along(self$layerSizes)){
+      xout <- self[[str_c("layer_",i)]](x)
+      x <- self$layerTransforms[[i]](xout)
+      if(self$Dropout){
+        x <- self[[str_c("layerDropout_",i)]](x)
+      }
+    }
+    ypred <- x
+    sc <- self$scfun(ypred,y)
+    
+    # sclagged <- torch_cat(lapply(1:self$sclags, function(lg) {
+    #   torch_cat(list(torch_ones(lg,self$scsize) * sc$mean(),sc[1:(sc$size(1)-lg),]), 1)
+    # }), 2)
+    sclagged <- torch_zeros(nrow(x), self$scsize * self$sclags)
+    columns <- xtype$indices()[2,]
+    uniqueColumns <- unique(as.array(columns))
+    for(i in uniqueColumns){
+      indices <- columns == i
+      scsub <- sc[indices,]
+      scsublagged <- torch_cat(lapply(1:self$sclags, function(lg) {
+        torch_cat(list(torch_zeros(lg,self$scsize), sc[1:(scsub$size(1)-lg),]), 1)
+      }), 2)
+      sclagged[indices] <- scsublagged
+    }
+    
+    # correction <- self$sclayer(sclagged) 
+    correction <- self$scbn(sclagged)
+    # correction <- torch_einsum('nf,of->no', list(correction, self$scweight))
+    correction <- nnf_leaky_relu(self$sclayer1(correction))
+    correction <- nnf_leaky_relu(self$sclayer2(correction))
+    correction <- nnf_leaky_relu(self$sclayer3(correction))
+    
+    ypredsc <- self$layerTransforms[[length(self$layerSizes)]](xout + correction)
+    ypredsc
   }
 )
 

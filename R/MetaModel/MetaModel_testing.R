@@ -16,7 +16,7 @@ NValidation <- 5000
 M <- 100
 sd <- 2
 minLoss <- sd^2
-thetas <- lapply(1:M, function(x) {max(rnorm(1,1,0.1),0)})
+thetas <- lapply(1:M, function(x) {max(rnorm(1,1,0.3),0)})
 
 f <- function(x,theta){
   # x %*% theta
@@ -65,9 +65,9 @@ criterion = function(y_pred,y) {mean((y_pred-y)^2)}
 #   ggtitle(round(thetas[[i]], 4))
 
 # baseModel --------------------------------------------------------------
-R <- 10
-out <- rep(NA,R)
-for(r in 1:R){
+# R <- 10
+# out <- rep(NA,R)
+# for(r in 1:R){
   
 inputSize <- K
 # layerSizes <- c(1)
@@ -81,20 +81,21 @@ baseModel = prepareBaseModel(baseModel,x = train$x)
 
 lr = 0.001
 weight_decay = 0
-fit <- trainModel(model = baseModel, train[1:2], test[1:2], criterion, epochs = 500, minibatch = 100, tempFilePath = tempFilePath, patience = 5, printEvery = Inf, lr = lr, weight_decay = weight_decay)
+fit <- trainModel(model = baseModel, criterion, train = train[1:2], test = test[1:2], validation = validation[1:2], epochs = 500, minibatch = 100, tempFilePath = tempFilePath, patience = 5, printEvery = 1, lr = lr, weight_decay = weight_decay)
+# fit <- trainModel(model = baseModel, criterion, train = train[1:2], test = NULL, validation = NULL, epochs = 15, minibatch = 100, tempFilePath = tempFilePath, patience = 5, printEvery = 1, lr = lr, weight_decay = weight_decay)
 baseModel <- fit$model
 baseModelProgress <- fit$progress
 y_pred_base <- baseModel(validation$x)
 loss_validation_base <- as.array(criterion(y_pred_base,validation$y))
 message(round(loss_validation_base,4))
-out[r] <- round(loss_validation_base,4)
-}
-mean(out)
+# out[r] <- round(loss_validation_base,4)
+# }
+# mean(out)
 
 # metaModel ---------------------------------------------------------------
-R <- 10
-out <- rep(NA,R)
-for(r in 1:R){
+# R <- 10
+# out <- rep(NA,R)
+# for(r in 1:R){
 metaModel <- MetaModel(baseModel, train$xtype, mesaParameterSize = 1, allowBias = T, pDropout = 0)
 minibatch <- function() {minibatchSampler(100,train$xtype)}
 
@@ -102,15 +103,15 @@ lr = 0.01
 weight_decay = 0
 # weight_decay = 1e-5
 # weight_decay = 10
-fit <- trainModel(model = metaModel, train, test, criterion, epochs = 200, minibatch = minibatch, tempFilePath = tempFilePath, patience = 5, printEvery = Inf, lr = lr , weight_decay = weight_decay)
+fit <- trainModel(model = metaModel, criterion, train, test, validation, epochs = 200, minibatch = minibatch, tempFilePath = tempFilePath, patience = 5, printEvery = 1, lr = lr , weight_decay = weight_decay)
 metaModel <- fit$model
 metaModelProgress <- fit$progress
 y_pred_meta <- metaModel(validation$x, validation$xtype)
 loss_validation_meta <- as.array(criterion(y_pred_meta,validation$y))
 message(str_c(round(loss_validation_meta,4), " ", round((loss_validation_meta - loss_validation_base)/(loss_validation_base - minLoss),4)))
-out[r] <- round((loss_validation_meta - loss_validation_base)/(loss_validation_base - minLoss),4)
-}
-mean(out)
+# out[r] <- round((loss_validation_meta - loss_validation_base)/(loss_validation_base - minLoss),4)
+# }
+# mean(out)
 
 # mesaModels --------------------------------------------------------------
 J <- M
@@ -131,7 +132,7 @@ for(j in 1:J){
   x_validation_subset <- validation$x[rows_validation,]
   y_validation_subset <- validation$y[rows_validation,]
   
-  fit <- trainModel(model = mesaModel, list(y_train_subset, x_train_subset), list(y_test_subset, x_test_subset), criterion, epochs = 50, minibatch = Inf, tempFilePath = NULL, patience = Inf, printEvery = Inf, lr=0.02)
+  fit <- trainModel(model = mesaModel, criterion, list(y_train_subset, x_train_subset), epochs = 50, minibatch = Inf, tempFilePath = NULL, patience = Inf, printEvery = Inf, lr=0.02)
   mesaModel <- fit$model
   
   y_pred_mesa <- mesaModel(x_validation_subset)

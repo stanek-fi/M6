@@ -63,7 +63,7 @@ StocksAggr <- StocksAggr[order(IntervalStart,Ticker)]
 # TrainStart <- as.Date("1990-01-01")
 # TrainStart <- as.Date("2010-01-01")
 TrainStart <- as.Date("2000-01-01")
-TrainEnd <- as.Date("2021-01-01")
+TrainEnd <- as.Date("2020-01-01")
 
 # TrainEnd <- as.Date("2021-01-01")
 # ValidationStart <- as.Date("2020-01-01")
@@ -77,11 +77,13 @@ ValidationEnd <- as.Date("2022-01-01")
 
 
 TrainRows <- which(StocksAggr[,(IntervalStart >= TrainStart) & (IntervalEnd <= TrainEnd)])
-TrainRowsM6Dataset <- StocksAggr[TrainRows,M6Dataset]
+# TrainRowsM6Dataset <- StocksAggr[TrainRows,M6Dataset]
+TrainInfo <- StocksAggr[TrainRows,.(Interval, IntervalStart, IntervalEnd, Shift, M6Dataset, Ticker, Return)]
 TestRows <- which(StocksAggr[,(IntervalStart > TrainEnd) & (IntervalEnd < ValidationStart)])
-TestRowsM6Dataset <- StocksAggr[TestRows,M6Dataset]
+# TestRowsM6Dataset <- StocksAggr[TestRows,M6Dataset]
+TestInfo <- StocksAggr[TestRows,.(Interval, IntervalStart, IntervalEnd, Shift, M6Dataset, Ticker, Return)]
 ValidationRows <- which(StocksAggr[,(IntervalStart >= ValidationStart) & (IntervalEnd <= ValidationEnd)])
-ValidationRowsM6Dataset <- StocksAggr[ValidationRows,M6Dataset]
+ValidationInfo <- StocksAggr[ValidationRows,.(Interval, IntervalStart, IntervalEnd, Shift, M6Dataset, Ticker, Return)]
 
 y <- StocksAggr[,ReturnQuintile]
 y <- torch_tensor(t(sapply(y,function(x) {
@@ -126,10 +128,11 @@ baseModel <- constructFFNN(inputSize, layerSizes, layerTransforms, layerDropouts
 baseModel = prepareBaseModel(baseModel,x = x_train)
 train <- list(y_train, x_train)
 test <- list(y_test, x_test)
+validation <- list(y_validation, x_validation)
 
 if(T){
   start <- Sys.time()
-  fit <- trainModel(model = baseModel, train, test, criterion, epochs = 100, minibatch = 1000, tempFilePath = tempFilePath, patience = 5, printEvery = 1)
+  fit <- trainModel(model = baseModel, criterion, train, test, validation, epochs = 100, minibatch = 1000, tempFilePath = tempFilePath, patience = 5, printEvery = 1)
   Sys.time() - start 
   baseModel <- fit$model
   baseModelProgress <- fit$progress
@@ -141,19 +144,16 @@ if(T){
 }
 y_pred_base <- baseModel(x_validation)
 loss_validation_base <- as.array(ComputeRPSTensor(y_pred_base,y_validation))
-loss_validation_base_M6Dataset <- sapply(1:max(ValidationRowsM6Dataset), function(i) {
-  as.array(ComputeRPSTensor(y_pred_base[which(ValidationRowsM6Dataset == i)], y_validation[which(ValidationRowsM6Dataset == i)]))
-})
+loss_validation_base_vector <- as.array(ComputeRPSTensorVector(y_pred_base,y_validation))
+loss_validation_base_M6Dataset <- sapply(1:max(ValidationInfo$M6Dataset), function(i) {mean(loss_validation_base_vector[which(ValidationInfo$M6Dataset == i)])})
 
-# lapply(1:max(ValidationRowsM6Dataset), function(i) {
-#   temp <- as.array(ComputeRPSTensorVector(y_pred_base[which(ValidationRowsM6Dataset == i)], y_validation[which(ValidationRowsM6Dataset == i)]))
-#   # temp <- as.array(ComputeRPSTensorVector(torch_tensor(matrix(0.2,nrow <- length(which(ValidationRowsM6Dataset == i)),ncol=5)), y_validation[which(ValidationRowsM6Dataset == i)]))
-#   info <- StocksAggr[ValidationRows][ValidationRowsM6Dataset==i,.(Interval,IntervalStart, IntervalEnd, Ticker, Shift, ETF, Return, ReturnQuintile)]
-#   info[,RPS:= temp]
-#   # info[,.(mRPS = mean(RPS)),.(Ticker,ETF>0)][order(mRPS)]
-#   info[,.(mRPS = mean(RPS),.N),.(ETF>0)][order(ETF)]
-# })
-
+# temp <- cbind(ValidationInfo,RPS = loss_validation_base_vector)
+# # temp <- cbind(TestInfo,RPS = as.array(ComputeRPSTensorVector(baseModel(x_test),y_test)))
+# temp <- temp[,.(RPS = mean(RPS), MV = mean(Return^2)), .(Shift, IntervalStart, M6Dataset)]
+# ggplot(temp, aes(x=IntervalStart,y=RPS,colour=as.factor(M6Dataset)))+
+#   geom_line()+geom_point()+
+#   # geom_line(aes(y=MV * 14))+
+#   facet_grid(Shift~.)
 
 # metaModel ---------------------------------------------------------------
 
@@ -161,10 +161,11 @@ metaModel <- MetaModel(baseModel, xtype_train, mesaParameterSize = 1, allowBias 
 minibatch <- function() {minibatchSampler(100,xtype_train)}
 train <- list(y_train, x_train, xtype_train)
 test <- list(y_test, x_test, xtype_test)
+validation <- list(y_validation, x_validation, xtype_validation)
 
 if(T){
   start <- Sys.time()
-  fit <- trainModel(model = metaModel, train, test, criterion, epochs = 100, minibatch = minibatch, tempFilePath = tempFilePath, patience = 5, printEvery = 1)
+  fit <- trainModel(model = metaModel, criterion, train, test, validation, epochs = 100, minibatch = minibatch, tempFilePath = tempFilePath, patience = 5, printEvery = 1)
   Sys.time() - start 
   metaModel <- fit$model
   metaModelProgress <- fit$progress
@@ -176,22 +177,10 @@ if(T){
 }
 y_pred_meta <- metaModel(x_validation, xtype_validation)
 loss_validation_meta <- as.array(ComputeRPSTensor(y_pred_meta,y_validation))
-loss_validation_meta_M6Dataset <- sapply(1:max(ValidationRowsM6Dataset), function(i) {
-  as.array(ComputeRPSTensor(y_pred_meta[which(ValidationRowsM6Dataset == i)], y_validation[which(ValidationRowsM6Dataset == i)]))
-})
+loss_validation_meta_vector <- as.array(ComputeRPSTensorVector(y_pred_meta,y_validation))
+loss_validation_meta_M6Dataset <- sapply(1:max(ValidationInfo$M6Dataset), function(i) {mean(loss_validation_meta_vector[which(ValidationInfo$M6Dataset == i)])})
 
 
-# lapply(1:max(ValidationRowsM6Dataset), function(i) {
-#   temp <- as.array(ComputeRPSTensorVector(y_pred_meta[which(ValidationRowsM6Dataset == i)], y_validation[which(ValidationRowsM6Dataset == i)]))
-#   info <- StocksAggr[ValidationRows][ValidationRowsM6Dataset==i,.(Interval,IntervalStart, IntervalEnd, Ticker, Shift, ETF, Return, ReturnQuintile)]
-#   info[,RPS:= temp]
-#   # info[,.(mRPS = mean(RPS)),.(Ticker,ETF>0)][order(mRPS)]
-#   info[,.(mRPS = mean(RPS),.N),.(ETF>0)][order(ETF)]
-# })
-
-
-# temp <- as.data.table(cbind(as.array(y_validation),round(as.array(y_pred_meta),3), return=round(StocksAggr[ValidationRows]$Return, 3)))
-# View(temp[order(V10+V9-V6-V7)])
 # mesaModel ---------------------------------------------------------------
 
 J <- ncol(xtype_train)
@@ -213,14 +202,11 @@ for (j in seq_len(J)){
   rows_validation <- xtype_validation$indices()[2,] == (j-1)
   x_validation_subset <- x_validation[rows_validation,]
   y_validation_subset <- y_validation[rows_validation,]
-
-  # train <- list(y_train_subset, x_train_subset)
-  # train <- list(torch_cat(list(y_train_subset, y_test_subset), 1), torch_cat(list(x_train_subset, x_test_subset), 1))
-  train <- list(y_test_subset, x_test_subset)
-  test <- list(y_test_subset, x_test_subset)
-
+  train <- list(torch_cat(list(y_train_subset, y_test_subset), 1), torch_cat(list(x_train_subset, x_test_subset), 1))
+  # train <- list(y_test_subset, x_test_subset)
+  # test <- list(y_test_subset, x_test_subset)
   if(nrow(train[[1]])>0){
-    fit <- trainModel(model = mesaModel, train, test, criterion, epochs = 100, minibatch = Inf, tempFilePath = NULL, patience = Inf, printEvery = Inf)
+    fit <- trainModel(model = mesaModel, criterion, train, epochs = 10, minibatch = Inf, tempFilePath = NULL, patience = Inf, printEvery = Inf)
     mesaModel <- fit$model
     mesaModelsProgress[[j]] <- fit$progress
   }
