@@ -13,8 +13,8 @@ source("R/MetaModel/MetaModel.R")
 featureList <- c(
   list(
     function(SD, BY) {Return(SD)}, #first is just return for y generation
-    function(SD, BY) {LagVolatility(SD, lags = 1:5)},
-    function(SD, BY) {LagReturn(SD, lags = 1:5)},
+    function(SD, BY) {LagVolatility(SD, lags = 1:12)},
+    function(SD, BY) {LagReturn(SD, lags = 1:12)},
     function(SD, BY) {IsETF(SD, BY, StockNames = StockNames)}
   ),
   TTR
@@ -37,8 +37,14 @@ if(GenerateStockAggr){
 }else{
   StocksAggr <- readRDS(file.path("Precomputed","StocksAggr.RDS"))
 }
-
 featureNames <- names(StocksAggr)[!(names(StocksAggr) %in% c("Ticker", "Interval", "Return", "Shift", "M6Dataset", "ReturnQuintile", "IntervalStart", "IntervalEnd"))]
+
+importance_train <- readRDS(file.path("Precomputed", "importance_train.RDS"))
+importance_validation <- readRDS(file.path("Precomputed", "importance_validation.RDS"))
+temp <- data.table(featureNames,importance = rowMeans(do.call(cbind,importance_train)))
+# temp <- data.table(featureNames,importance = rowMeans(do.call(cbind,importance_validation)))
+featureNames <- temp[order(importance,decreasing = T)][1:70,featureNames]
+
 StocksAggr <- imputeFeatures(StocksAggr, featureNames = featureNames)
 StocksAggr <- standartizeFeatures(StocksAggr, featureNames = featureNames)
 StocksAggr <- StocksAggr[order(Ticker,IntervalStart)]
@@ -107,26 +113,31 @@ gc()
 R <- 3
 res <- rep(NA,R)
 resM6 <- matrix(NA,R,10)
+importance_train <- vector(mode="list",R)
+importance_validation <- vector(mode="list",R)
 start <- Sys.time()
 r <- 1
+
 for(r in 1:R){
   set.seed(r)
   torch_manual_seed(r)
   print(r)
   inputSize <- length(featureNames)
-  # layerSizes <- c(32,8, 5)
-  layerSizes <- c(16,8, 5)
+  layerSizes <- c(32,8, 5)
+  # layerSizes <- c(16,8, 5)
   # layerSizes <- c(6,5)
   layerDropouts <- c(rep(0.2, length(layerSizes)-1),0)
   layerTransforms <- c(lapply(seq_len(length(layerSizes)-1), function(x) nnf_leaky_relu), list(function(x) {nnf_softmax(x,2)}))
   baseModel <- constructFFNN(inputSize, layerSizes, layerTransforms, layerDropouts)
   # baseModel = prepareBaseModel(baseModel,x = x_train)
-  minibatch = 1000
+  # minibatch = 1000
+  # minibatch = 64
+  minibatch = c(64, 128, 500, rep(1000, 5), rep(2000, 5), rep(5000, 10), rep(10000, 100))
   # minibatch <- function() {minibatchSampler(20,xtype_train)}
   lr <- 0.001
   if(T){
     start <- Sys.time()
-    fit <- trainModel(model = baseModel, criterion, train = list(y_train, x_train), test = list(y_test, x_test), validation = NULL, epochs = 100, minibatch = minibatch, tempFilePath = tempFilePath, patience = 5, printEvery = 1, lr=lr)
+    fit <- trainModel(model = baseModel, criterion, train = list(y_train, x_train), test = list(y_test, x_test), validation = list(y_validation, x_validation), epochs = 100, minibatch = minibatch, tempFilePath = tempFilePath, patience = 5, printEvery = 1, lr=lr)
     # fit <- trainModel(model = baseModel, criterion, train = list(y_train, x_train), test = list(y_test, x_test), validation = NULL, epochs = 100, minibatch = minibatch, tempFilePath = tempFilePath, patience = 5, printEvery = Inf, lr=lr)
     Sys.time() - start
     baseModel <- fit$model
@@ -142,15 +153,19 @@ for(r in 1:R){
   loss_validation_base_vector <- as.array(ComputeRPSTensorVector(y_pred_base,y_validation))
   loss_validation_base_M6Dataset <- sapply(1:max(ValidationInfo$M6Dataset), function(i) {mean(loss_validation_base_vector[which(ValidationInfo$M6Dataset == i)])})
 
+  # importance_train[[r]] <- evaluateImportance(x_train,function(x) {as.array(ComputeRPSTensor(baseModel(x),y_train))})
+  # importance_validation[[r]] <- evaluateImportance(x_validation,function(x) {as.array(ComputeRPSTensor(baseModel(x),y_validation))})
   res[r] <- loss_validation_base
   resM6[r,] <- loss_validation_base_M6Dataset
-
 }
 Sys.time()-start
 
 resM6
 res
 mean(res)
+
+# saveRDS(importance_train, file.path("Precomputed", "importance_train.RDS"))
+# saveRDS(importance_validation, file.path("Precomputed", "importance_validation.RDS"))
 
 # .rs.restartR()
 

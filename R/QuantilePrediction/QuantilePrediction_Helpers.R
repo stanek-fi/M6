@@ -103,14 +103,17 @@ trainModel <- function(model, criterion, train, test = NULL, validation = NULL, 
   if(is.null(isSparse)){
     isSparse <- c(rep(F,2), rep(T,length(train) - 2))
   }
+  if(length(minibatch)==1){
+    minibatch <- lapply(1:epochs, function(e) {minibatch})
+  }
   
   for(e in 1:epochs){
     
-    if(is.numeric(minibatch)){
+    if(is.numeric(minibatch[[e]])){
       temp <- sample(seq_len(nrow(train[[2]])))
-      mbs <- split(temp, ceiling(seq_along(temp)/minibatch))
+      mbs <- split(temp, ceiling(seq_along(temp)/minibatch[[e]]))
     }else{
-      mbs <- minibatch()
+      mbs <- minibatch[[e]]()
     }
     
     model$train()
@@ -536,6 +539,17 @@ GenIntervalInfos = function(Submission, Shifts = 0, TimeEnd = as.Date("2023-02-0
 #     }
 #   }
 # }
+
+evaluateImportance <- function(x,f){
+  benchmarkPerf <- f(x)
+  out <- sapply(1:ncol(x), function(i) {
+    xtemp <- x$clone()
+    xtemp[,i] = mean(xtemp[,i])
+    f(xtemp)
+  })
+  out <- out / benchmarkPerf
+  return(out)
+}
 
 
 

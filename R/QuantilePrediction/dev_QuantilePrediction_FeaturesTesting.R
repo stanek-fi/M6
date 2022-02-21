@@ -422,10 +422,25 @@ ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour 
   geom_line()
 
 
-
-
-
-
-
 ZigZag(SD[1:16,.SD,.SDcols = c("High", "Low", "Close")])[1:16] - ZigZag(SD[1:34,.SD,.SDcols = c("High", "Low", "Close")])[1:16]
+
+
+
+
+
+
+
+
+
+
+temp <-TTRWrapper(SD = SD, f = OBV, SDcols = c("Close"), Normalize = F, SDcolsPlus = "Volume", Transform = list(function(x) c(NA,diff(x))))
+temp <-TTRWrapper(SD = SD, f = chaikinAD, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsOut = "chaikinAD", SDcolsPlus = "Volume", Transform = list(function(x) c(NA,diff(x))))
+temp <-TTRWrapper(SD = SD, f = chaikinAD, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsOut = "chaikinAD", SDcolsPlus = "Volume")
+
+temp <- TTRWrapper(SD = SD, f = SMI, SDcols = c("High", "Low", "Close"), Normalize = -1, NormalizeWith = "SMI", Suffix = "_n=13", n=40, Prefix = "SMI_")
+temp <-TTRWrapper(SD = SD, f = WPR, SDcols = c("High", "Low", "Close"), Normalize = F, SDcolsOut = "WPR")
+temp[,time:= as.Date(str_sub(Interval, 1, 10))]
+ggplot(melt(temp, id.vars = c("Interval", "time")), aes(x=time, y=value, colour = variable))+
+  geom_line()
+
 
