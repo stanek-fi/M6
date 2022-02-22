@@ -13,8 +13,8 @@ source("R/MetaModel/MetaModel.R")
 featureList <- c(
   list(
     function(SD, BY) {Return(SD)}, #first is just return for y generation
-    function(SD, BY) {LagVolatility(SD, lags = 1:12)},
-    function(SD, BY) {LagReturn(SD, lags = 1:12)},
+    function(SD, BY) {LagVolatility(SD, lags = 1:5)},
+    function(SD, BY) {LagReturn(SD, lags = 1:5)},
     function(SD, BY) {IsETF(SD, BY, StockNames = StockNames)}
   ),
   TTR
@@ -39,11 +39,18 @@ if(GenerateStockAggr){
 }
 featureNames <- names(StocksAggr)[!(names(StocksAggr) %in% c("Ticker", "Interval", "Return", "Shift", "M6Dataset", "ReturnQuintile", "IntervalStart", "IntervalEnd"))]
 
-importance_train <- readRDS(file.path("Precomputed", "importance_train.RDS"))
-importance_validation <- readRDS(file.path("Precomputed", "importance_validation.RDS"))
-temp <- data.table(featureNames,importance = rowMeans(do.call(cbind,importance_train)))
-# temp <- data.table(featureNames,importance = rowMeans(do.call(cbind,importance_validation)))
-featureNames <- temp[order(importance,decreasing = T)][1:70,featureNames]
+# featureNames <- c(
+#   str_c("VolatilityLag", 1:5),  str_c("ReturnLag", 1:5),
+#   c("ETF", "volatility_n=100_last", "volatility_n=100", "volatility_(garman.klass)", "volatility_n=10", "ATR_tr_n=28", "ADX1_DIp", "ADX1_DIn", "ATR_atr_n=28", "ATR_trueHigh_n=28", "RSI",  "SMI2_signal_n=13", "SMI2_signal_n=30", "TRIX1_TRIX_n=40", "TRIX1_signal_n=40", "BBands2_dn", "BBands2_up", "BBands2_pctB")
+# )
+
+# importance_train <- readRDS(file.path("Precomputed", "importance_train.RDS"))
+# importance_test <- readRDS(file.path("Precomputed", "importance_test.RDS"))
+# temp <- data.table(featureNames,importance_train = rowMeans(do.call(cbind,importance_train)), importance_test = rowMeans(do.call(cbind,importance_test)))
+# temp <- temp[order(importance_test,decreasing = T)][,position_test := 1:.N]
+# temp <- temp[order(importance_train,decreasing = T)][,position_train := 1:.N]
+# # temp[str_detect(featureNames, "ADX")]
+# featureNames <- temp[order(importance_test,decreasing = T)][1:50,featureNames]
 
 StocksAggr <- imputeFeatures(StocksAggr, featureNames = featureNames)
 StocksAggr <- standartizeFeatures(StocksAggr, featureNames = featureNames)
@@ -114,6 +121,7 @@ R <- 3
 res <- rep(NA,R)
 resM6 <- matrix(NA,R,10)
 importance_train <- vector(mode="list",R)
+importance_test <- vector(mode="list",R)
 importance_validation <- vector(mode="list",R)
 start <- Sys.time()
 r <- 1
@@ -123,16 +131,16 @@ for(r in 1:R){
   torch_manual_seed(r)
   print(r)
   inputSize <- length(featureNames)
-  layerSizes <- c(32,8, 5)
+  layerSizes <- c(32, 8, 5)
   # layerSizes <- c(16,8, 5)
   # layerSizes <- c(6,5)
   layerDropouts <- c(rep(0.2, length(layerSizes)-1),0)
   layerTransforms <- c(lapply(seq_len(length(layerSizes)-1), function(x) nnf_leaky_relu), list(function(x) {nnf_softmax(x,2)}))
   baseModel <- constructFFNN(inputSize, layerSizes, layerTransforms, layerDropouts)
   # baseModel = prepareBaseModel(baseModel,x = x_train)
-  # minibatch = 1000
+  minibatch = 1000
   # minibatch = 64
-  minibatch = c(64, 128, 500, rep(1000, 5), rep(2000, 5), rep(5000, 10), rep(10000, 100))
+  # minibatch = c(64, 128, rep(1000, 5), rep(2000, 5), rep(5000, 10), rep(10000, 100))
   # minibatch <- function() {minibatchSampler(20,xtype_train)}
   lr <- 0.001
   if(T){
@@ -154,6 +162,7 @@ for(r in 1:R){
   loss_validation_base_M6Dataset <- sapply(1:max(ValidationInfo$M6Dataset), function(i) {mean(loss_validation_base_vector[which(ValidationInfo$M6Dataset == i)])})
 
   # importance_train[[r]] <- evaluateImportance(x_train,function(x) {as.array(ComputeRPSTensor(baseModel(x),y_train))})
+  # importance_test[[r]] <- evaluateImportance(x_test,function(x) {as.array(ComputeRPSTensor(baseModel(x),y_test))})
   # importance_validation[[r]] <- evaluateImportance(x_validation,function(x) {as.array(ComputeRPSTensor(baseModel(x),y_validation))})
   res[r] <- loss_validation_base
   resM6[r,] <- loss_validation_base_M6Dataset
@@ -165,6 +174,7 @@ res
 mean(res)
 
 # saveRDS(importance_train, file.path("Precomputed", "importance_train.RDS"))
+# saveRDS(importance_test, file.path("Precomputed", "importance_test.RDS"))
 # saveRDS(importance_validation, file.path("Precomputed", "importance_validation.RDS"))
 
 # .rs.restartR()
