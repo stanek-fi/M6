@@ -24,7 +24,7 @@ Shifts <- c(0,7,14,21)
 Submission = 0
 IntervalInfos <- GenIntervalInfos(Submission = Submission, Shifts = Shifts)
 
-GenerateStockAggr <- F
+GenerateStockAggr <- T
 if(GenerateStockAggr){
   StockNames <- readRDS(file.path("Data","StockNames.RDS"))
   Stocks <- readRDS(file.path("Data","StocksAll.RDS"))
@@ -138,9 +138,10 @@ for(r in 1:R){
   layerTransforms <- c(lapply(seq_len(length(layerSizes)-1), function(x) nnf_leaky_relu), list(function(x) {nnf_softmax(x,2)}))
   baseModel <- constructFFNN(inputSize, layerSizes, layerTransforms, layerDropouts)
   # baseModel = prepareBaseModel(baseModel,x = x_train)
-  minibatch = 1000
+  minibatch = c(128, rep(1000, 5), rep(5000,100))
+  # minibatch = c(64,rep(1000,100))
   # minibatch = 64
-  # minibatch = c(64, 128, rep(1000, 5), rep(2000, 5), rep(5000, 10), rep(10000, 100))
+  # minibatch = c(64, rep(1000, 5), rep(2000, 5), rep(5000, 10), rep(10000, 100))
   # minibatch <- function() {minibatchSampler(20,xtype_train)}
   lr <- 0.001
   if(T){

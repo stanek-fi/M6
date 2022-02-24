@@ -43,7 +43,7 @@ prepareBaseModel <- function(baseModel, x) {
 
 
 MetaModel = nn_module(
-  initialize = function(baseModel, xtype, mesaParameterSize = 1, allowBias = T, pDropout = 0) {
+  initialize = function(baseModel, xtype, mesaParameterSize = 1, allowBias = T, pDropout = 0, initMesaRange = 0, initMetaRange = 1) {
     self$fforward <- baseModel$fforward
     self$stateStructure <- baseModel$stateStructure
     self$flattenState <- baseModel$flattenState
@@ -53,8 +53,9 @@ MetaModel = nn_module(
     self$xtypeSize <- ncol(xtype)
     self$mesaParameterSize <- mesaParameterSize
     self$allowBias <- allowBias
-    self$mesaLayerWeight <- nn_parameter(torch_tensor(matrix(0, nrow = self$mesaParameterSize, ncol = self$xtypeSize), dtype = torch_float()))
-    self$metaLayer <- nn_linear(mesaParameterSize, baseModel$stateSize, bias = F)
+    self$mesaLayerWeight <- nn_parameter(torch_tensor(matrix(runif(self$mesaParameterSize * self$xtypeSize, -initMesaRange, initMesaRange), nrow = self$mesaParameterSize, ncol = self$xtypeSize), dtype = torch_float()))
+    # self$metaLayer <- nn_linear(mesaParameterSize, baseModel$stateSize, bias = F)
+    self$metaLayerWeight <- nn_parameter(torch_tensor(matrix(runif(baseModel$stateSize * mesaParameterSize, -initMetaRange, initMetaRange), nrow = baseModel$stateSize), dtype = torch_float()))
     if(self$allowBias){
       self$metaLayerBias <- nn_parameter(torch_tensor(rep(0, self$stateSize), dtype = torch_float()))
     }
@@ -73,11 +74,13 @@ MetaModel = nn_module(
       for(i in uniqueColumns){
         indices <- columns == i
         xtypei <- torch_tensor(replace(numeric(xtype$size(2)), i + 1, 1)) #must add one to correct for zero indexing
-        mesaState <- nnf_linear(xtypei, self$mesaLayerWeight)
+        mesaState <- nnf_linear(xtypei, self$mesaLayerWeight) 
         if(self$allowBias){
-          metaStateFlatDiff <- self$metaLayerBias + self$metaLayer(mesaState)
+          # metaStateFlatDiff <- self$metaLayerBias + self$metaLayer(mesaState) 
+          metaStateFlatDiff <- self$metaLayerBias + nnf_linear(mesaState, self$metaLayerWeight)
         }else{
-          metaStateFlatDiff <- self$metaLayer(mesaState)
+          # metaStateFlatDiff <- self$metaLayer(mesaState)
+          metaStateFlatDiff <- nnf_linear(mesaState, self$metaLayerWeight)
         }
         metaStateFlat <-  baseState + self$dropout(metaStateFlatDiff)
         metaState <- self$unflattenState(metaStateFlat, self$stateStructure)
@@ -99,7 +102,7 @@ MetaModel = nn_module(
     xout
   },
   
-  MesaModel = function(metaModel) {
+  MesaModel = function(metaModel) { 
     
     metaState <- metaModel$state_dict()
     

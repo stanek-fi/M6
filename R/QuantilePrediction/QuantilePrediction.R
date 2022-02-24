@@ -114,25 +114,26 @@ criterion = function(y_pred,y) {ComputeRPSTensor(y_pred,y)}
 
 
 # baseModel ---------------------------------------------------------------
+r <- 1
+set.seed(r)
+torch_manual_seed(r)
 
 inputSize <- length(featureNames)
-# layerSizes <- c(32, 5)
-# layerSizes <- c(32, 8, 5)
 layerSizes <- c(32, 8, 5)
-# layerSizes <- c(32, 8, 5)
-# layerSizes <- c(64, 32, 8, 5)
-# layerSizes <- c(100, 5)
 layerDropouts <- c(rep(0.2, length(layerSizes)-1),0)
-layerTransforms <- c(lapply(seq_len(length(layerSizes)-1), function(x) nnf_relu), list(function(x) {nnf_softmax(x,2)}))
+layerTransforms <- c(lapply(seq_len(length(layerSizes)-1), function(x) nnf_leaky_relu), list(function(x) {nnf_softmax(x,2)}))
 baseModel <- constructFFNN(inputSize, layerSizes, layerTransforms, layerDropouts)
 baseModel = prepareBaseModel(baseModel,x = x_train)
-train <- list(y_train, x_train)
-test <- list(y_test, x_test)
-validation <- list(y_validation, x_validation)
+# train <- list(y_train, x_train)
+# test <- list(y_test, x_test)
+# validation <- list(y_validation, x_validation)
+minibatch <- 1000
+lr <- 0.001
 
 if(T){
   start <- Sys.time()
-  fit <- trainModel(model = baseModel, criterion, train, test, validation, epochs = 100, minibatch = 1000, tempFilePath = tempFilePath, patience = 5, printEvery = 1)
+  # fit <- trainModel(model = baseModel, criterion, train, test, validation, epochs = 100, minibatch = 1000, tempFilePath = tempFilePath, patience = 5, printEvery = 1)
+  fit <- trainModel(model = baseModel, criterion, train = list(y_train, x_train), test = list(y_test, x_test), validation = list(y_validation, x_validation), epochs = 100, minibatch = minibatch, tempFilePath = tempFilePath, patience = 5, printEvery = 1, lr=lr)
   Sys.time() - start 
   baseModel <- fit$model
   baseModelProgress <- fit$progress
@@ -156,16 +157,25 @@ loss_validation_base_M6Dataset <- sapply(1:max(ValidationInfo$M6Dataset), functi
 #   facet_grid(Shift~.)
 
 # metaModel ---------------------------------------------------------------
+r <- 1
+set.seed(r)
+torch_manual_seed(r)
 
-metaModel <- MetaModel(baseModel, xtype_train, mesaParameterSize = 1, allowBias = F, pDropout = 0.05)
-minibatch <- function() {minibatchSampler(100,xtype_train)}
-train <- list(y_train, x_train, xtype_train)
-test <- list(y_test, x_test, xtype_test)
-validation <- list(y_validation, x_validation, xtype_validation)
+metaModel <- MetaModel(baseModel, xtype_train, mesaParameterSize = 2, allowBias = T, pDropout = 0,  initMesaRange = 0, initMetaRange = 0.7)
+minibatch <- function() {minibatchSampler(5,xtype_train)}
+# minibatch <- 10000
+lr <- 0.0001
+# train <- list(y_train, x_train, xtype_train)
+# rows <- StocksAggr[TrainRows][,which(IntervalStart > as.Date("2010-01-10"))]
+# train <- list(subsetTensor(y_train,rows), subsetTensor(x_train,rows), subsetTensor(xtype_train,rows))
+# minibatch <- function() {minibatchSampler(5,train[[3]])}
+# test <- list(y_test, x_test, xtype_test)
+# validation <- list(y_validation, x_validation, xtype_validation)
 
 if(T){
   start <- Sys.time()
-  fit <- trainModel(model = metaModel, criterion, train, test, validation, epochs = 100, minibatch = minibatch, tempFilePath = tempFilePath, patience = 5, printEvery = 1)
+  fit <- trainModel(model = metaModel, criterion, train = list(y_train, x_train, xtype_train), test = list(y_test, x_test, xtype_test), validation = list(y_validation, x_validation, xtype_validation), epochs = 100, minibatch = minibatch, tempFilePath = tempFilePath, patience = 5, printEvery = 1, lr = lr)
+  # fit <- trainModel(model = metaModel, criterion, train = train, test = list(y_test, x_test, xtype_test), validation = list(y_validation, x_validation, xtype_validation), epochs = 100, minibatch = minibatch, tempFilePath = tempFilePath, patience = 5, printEvery = 1, lr = lr)
   Sys.time() - start 
   metaModel <- fit$model
   metaModelProgress <- fit$progress
