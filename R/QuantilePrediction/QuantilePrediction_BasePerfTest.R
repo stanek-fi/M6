@@ -24,7 +24,7 @@ Shifts <- c(0,7,14,21)
 Submission = 0
 IntervalInfos <- GenIntervalInfos(Submission = Submission, Shifts = Shifts)
 
-GenerateStockAggr <- T
+GenerateStockAggr <- F
 if(GenerateStockAggr){
   StockNames <- readRDS(file.path("Data","StockNames.RDS"))
   Stocks <- readRDS(file.path("Data","StocksAll.RDS"))
@@ -53,7 +53,8 @@ featureNames <- names(StocksAggr)[!(names(StocksAggr) %in% c("Ticker", "Interval
 # featureNames <- temp[order(importance_test,decreasing = T)][1:50,featureNames]
 
 StocksAggr <- imputeFeatures(StocksAggr, featureNames = featureNames)
-StocksAggr <- standartizeFeatures(StocksAggr, featureNames = featureNames)
+# StocksAggr <- standartizeFeatures(StocksAggr, featureNames = featureNames)
+StocksAggr <- standartizeFeatures(StocksAggr, featureNames = featureNames[!(featureNames %in% c("ETF"))])
 StocksAggr <- StocksAggr[order(Ticker,IntervalStart)]
 # StocksAggr <- StocksAggr[M6Dataset==1]
 # StocksAggr <- StocksAggr[ETF>0]
@@ -76,11 +77,11 @@ ValidationEnd <- as.Date("2022-01-01")
 # ValidationEnd <- IntervalInfos[[1]]$IntervalEnds[length(IntervalInfos[[1]]$IntervalEnds) - (12 - Submission) - 1]
 
 TrainRows <- which(StocksAggr[,(IntervalStart >= TrainStart) & (IntervalEnd <= TrainEnd)])
-TrainInfo <- StocksAggr[TrainRows,.(Interval, IntervalStart, IntervalEnd, Shift, M6Dataset, Ticker, Return)]
+TrainInfo <- StocksAggr[TrainRows,.(Interval, IntervalStart, IntervalEnd, Shift, M6Dataset, Ticker, Return, ETF)]
 TestRows <- which(StocksAggr[,(IntervalStart > TrainEnd) & (IntervalEnd < ValidationStart)])
-TestInfo <- StocksAggr[TestRows,.(Interval, IntervalStart, IntervalEnd, Shift, M6Dataset, Ticker, Return)]
+TestInfo <- StocksAggr[TestRows,.(Interval, IntervalStart, IntervalEnd, Shift, M6Dataset, Ticker, Return, ETF)]
 ValidationRows <- which(StocksAggr[,(IntervalStart >= ValidationStart) & (IntervalEnd <= ValidationEnd)])
-ValidationInfo <- StocksAggr[ValidationRows,.(Interval, IntervalStart, IntervalEnd, Shift, M6Dataset, Ticker, Return)]
+ValidationInfo <- StocksAggr[ValidationRows,.(Interval, IntervalStart, IntervalEnd, Shift, M6Dataset, Ticker, Return, ETF)]
 
 y <- StocksAggr[,ReturnQuintile]
 y <- torch_tensor(t(sapply(y,function(x) {
@@ -113,9 +114,21 @@ criterion = function(y_pred,y) {ComputeRPSTensor(y_pred,y)}
 rm(StocksAggr)
 gc()
 # testing perf -----------------------------------------------------------------
-# train <- list(y_train, x_train)
-# test <- list(y_test, x_test)
-# validation <- list(y_validation, x_validation)
+# TrainRowsSubset <- TrainInfo[,which(ETF==0)]
+# TestRowsSubset <- TestInfo[,which(ETF==0)]
+# ValidationRowsSubset <- ValidationInfo[,which(ETF==0)]
+# # ValidationInfo[,mean(ETF==1)]
+# 
+# y_train <- y_train[TrainRowsSubset,]
+# x_train <- x_train[TrainRowsSubset,]
+# y_test <- y_test[TestRowsSubset,]
+# x_test <- x_test[TestRowsSubset,]
+# y_validation <- y_validation[ValidationRowsSubset,]
+# x_validation <- x_validation[ValidationRowsSubset,]
+
+train <- list(y_train, x_train)
+test <- list(y_test, x_test)
+validation <- list(y_validation, x_validation)
 
 R <- 3
 res <- rep(NA,R)
@@ -131,14 +144,15 @@ for(r in 1:R){
   torch_manual_seed(r)
   print(r)
   inputSize <- length(featureNames)
-  layerSizes <- c(32, 8, 5)
+  layerSizes <- c(20, 8, 5)
   # layerSizes <- c(16,8, 5)
   # layerSizes <- c(6,5)
   layerDropouts <- c(rep(0.2, length(layerSizes)-1),0)
   layerTransforms <- c(lapply(seq_len(length(layerSizes)-1), function(x) nnf_leaky_relu), list(function(x) {nnf_softmax(x,2)}))
   baseModel <- constructFFNN(inputSize, layerSizes, layerTransforms, layerDropouts)
   # baseModel = prepareBaseModel(baseModel,x = x_train)
-  minibatch = c(128, rep(1000, 5), rep(5000,100))
+  # minibatch = c(128, rep(1000, 5), rep(5000,100))
+  minibatch = 1000
   # minibatch = c(64,rep(1000,100))
   # minibatch = 64
   # minibatch = c(64, rep(1000, 5), rep(2000, 5), rep(5000, 10), rep(10000, 100))
@@ -146,8 +160,9 @@ for(r in 1:R){
   lr <- 0.001
   if(T){
     start <- Sys.time()
-    fit <- trainModel(model = baseModel, criterion, train = list(y_train, x_train), test = list(y_test, x_test), validation = list(y_validation, x_validation), epochs = 100, minibatch = minibatch, tempFilePath = tempFilePath, patience = 5, printEvery = 1, lr=lr)
+    # fit <- trainModel(model = baseModel, criterion, train = list(y_train, x_train), test = list(y_test, x_test), validation = list(y_validation, x_validation), epochs = 100, minibatch = minibatch, tempFilePath = tempFilePath, patience = 5, printEvery = 1, lr=lr)
     # fit <- trainModel(model = baseModel, criterion, train = list(y_train, x_train), test = list(y_test, x_test), validation = NULL, epochs = 100, minibatch = minibatch, tempFilePath = tempFilePath, patience = 5, printEvery = Inf, lr=lr)
+    fit <- trainModel(model = baseModel, criterion, train = train, test = test, validation = validation, epochs = 100, minibatch = minibatch, tempFilePath = tempFilePath, patience = 5, printEvery = 1, lr=lr)
     Sys.time() - start
     baseModel <- fit$model
     baseModelProgress <- fit$progress

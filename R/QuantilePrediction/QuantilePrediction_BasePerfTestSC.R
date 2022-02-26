@@ -109,7 +109,7 @@ R <- 3
 res <- rep(NA,R)
 resM6 <- matrix(NA,R,10)
 start <- Sys.time()
-r <- 1
+r <- 2
 for(r in 1:R){
   set.seed(r)
   torch_manual_seed(r)
@@ -137,17 +137,26 @@ for(r in 1:R){
   # scsize <- 1
   lr <- 0.001
   # isSparse <- c(F,F,F)
-  isSparse <- c(F,F,T,F)
-  minibatch <- function() {minibatchSampler(2,xtype_train)}
+  # isSparse <- c(F,F,T,F)
+  isSparse <- c(F,F,T,F,F)
+  minibatch <- function() {minibatchSampler(100,xtype_train)}
   # baseModel <- constructSCNN(inputSize, layerSizes, layerTransforms, scfun = scfun, scsize = scsize, sclags = sclags, layerDropouts = layerDropouts)
   baseModel <- constructSCNN2(inputSize, layerSizes, layerTransforms, scfun = scfun, scsize = scsize, sclags = sclags, layerDropouts = layerDropouts)
+
   
   if(T){
     start <- Sys.time()
     # fit <- trainModel(model = baseModel, criterion, train = list(y_train, x_train, y_train), test = list(y_test, x_test, y_test), validation = NULL, epochs = 2000, minibatch = minibatch, tempFilePath = tempFilePath, patience = 5, printEvery = 1, lr=lr, isSparse = isSparse)
-    fit <- trainModel(model = baseModel, criterion, train = list(y_train, x_train, xtype_train, y_train), test = list(y_test, x_test, xtype_test, y_test), validation = NULL, epochs = 2000, minibatch = minibatch, tempFilePath = tempFilePath, patience = 5, printEvery = 1, lr=lr, isSparse = isSparse)
+    fit <- trainModel(model = baseModel, criterion, train = list(y_train, x_train, xtype_train, y_train, torch_tensor(matrix(0,nrow(x_train),1))), test = list(y_test, x_test, xtype_test, y_test, torch_tensor(matrix(0,nrow(x_test),1))), validation = list(y_validation, x_validation, xtype_validation, y_validation, torch_tensor(matrix(0,nrow(x_validation),1))), epochs = 2000, minibatch = minibatch, tempFilePath = tempFilePath, patience = 5, printEvery = 1, lr=lr, isSparse = isSparse)
     Sys.time() - start
     baseModel <- fit$model
+    
+    start <- Sys.time()
+    # fit <- trainModel(model = baseModel, criterion, train = list(y_train, x_train, y_train), test = list(y_test, x_test, y_test), validation = NULL, epochs = 2000, minibatch = minibatch, tempFilePath = tempFilePath, patience = 5, printEvery = 1, lr=lr, isSparse = isSparse)
+    fit <- trainModel(model = baseModel, criterion, train = list(y_train, x_train, xtype_train, y_train, torch_tensor(matrix(1,nrow(x_train),1))), test = list(y_test, x_test, xtype_test, y_test, torch_tensor(matrix(1,nrow(x_test),1))), validation = list(y_validation, x_validation, xtype_validation, y_validation, torch_tensor(matrix(1,nrow(x_validation),1))), epochs = 2000, minibatch = minibatch, tempFilePath = tempFilePath, patience = 5, printEvery = 1, lr=lr, isSparse = isSparse)
+    Sys.time() - start
+    baseModel <- fit$model
+    
     baseModelProgress <- fit$progress
     saveRDS(baseModelProgress, file.path("Precomputed","baseModelProgress.RDS"))
     torch_save(baseModel, file.path("Precomputed", str_c("baseModel", ".t7")))

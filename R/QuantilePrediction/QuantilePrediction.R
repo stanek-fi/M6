@@ -55,7 +55,15 @@ if(GenerateStockAggr){
 
 featureNames <- names(StocksAggr)[!(names(StocksAggr) %in% c("Ticker", "Interval", "Return", "Shift", "M6Dataset", "ReturnQuintile", "IntervalStart", "IntervalEnd"))]
 StocksAggr <- imputeFeatures(StocksAggr, featureNames = featureNames)
-StocksAggr <- standartizeFeatures(StocksAggr, featureNames = featureNames)
+# StocksAggr <- standartizeFeatures(StocksAggr, featureNames = featureNames)
+StocksAggr <- standartizeFeatures(StocksAggr, featureNames = featureNames[!(featureNames %in% c("ETF"))])
+
+# temp <- as.data.table(model.matrix(~ as.character(StocksAggr$M6Dataset) - 1))
+# StocksAggr <- cbind(StocksAggr,temp)
+# featureNames <- c(featureNames, names(temp))
+# StocksAggr[, MeanETF := mean(ETF) - 0.5,.(Interval,M6Dataset)]
+# featureNames <- c(featureNames, "MeanETF")
+
 StocksAggr <- StocksAggr[order(IntervalStart,Ticker)]
 # StocksAggr <- StocksAggr[ETF>0]
 
@@ -157,11 +165,11 @@ loss_validation_base_M6Dataset <- sapply(1:max(ValidationInfo$M6Dataset), functi
 #   facet_grid(Shift~.)
 
 # metaModel ---------------------------------------------------------------
-r <- 1
+r <- 2
 set.seed(r)
 torch_manual_seed(r)
 
-metaModel <- MetaModel(baseModel, xtype_train, mesaParameterSize = 2, allowBias = T, pDropout = 0,  initMesaRange = 0, initMetaRange = 0.7)
+metaModel <- MetaModel(baseModel, xtype_train, mesaParameterSize = 2, allowBias = T, pDropout = 0.1,  initMesaRange = 0, initMetaRange = 0.7)
 minibatch <- function() {minibatchSampler(5,xtype_train)}
 # minibatch <- 10000
 lr <- 0.0001

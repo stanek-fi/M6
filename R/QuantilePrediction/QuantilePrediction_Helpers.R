@@ -350,10 +350,10 @@ constructSCNN2 = nn_module(
     self$sclags <- sclags
     # self$sclayer <- nn_linear(self$scsize * self$sclags, self$layerSizesAll[length(self$layerSizesAll)])
     self$scweight <- nn_parameter(torch_zeros(self$layerSizesAll[length(self$layerSizesAll)],self$scsize * self$sclags))
-    self$scbn <- nn_batch_norm1d(self$scsize * self$sclags)
-    self$sclayer1 <- nn_linear(self$scsize * self$sclags, 5)
-    self$sclayer2 <- nn_linear(5, 5)
-    self$sclayer3 <- nn_linear(5, self$layerSizesAll[length(self$layerSizesAll)])
+    # self$scbn <- nn_batch_norm1d(self$scsize * self$sclags)
+    # self$sclayer1 <- nn_linear(self$scsize * self$sclags, 5)
+    # self$sclayer2 <- nn_linear(5, 5)
+    # self$sclayer3 <- nn_linear(5, self$layerSizesAll[length(self$layerSizesAll)])
     for(i in seq_along(self$layerSizes)){
       self[[str_c("layer_",i)]] <- nn_linear(self$layerSizesAll[i], self$layerSizesAll[i+1])
     }
@@ -363,7 +363,7 @@ constructSCNN2 = nn_module(
       }
     }
   },
-  forward = function(x,xtype,y) {
+  forward = function(x,xtype,y, applyCorrection) {
     for(i in seq_along(self$layerSizes)){
       xout <- self[[str_c("layer_",i)]](x)
       x <- self$layerTransforms[[i]](xout)
@@ -390,13 +390,18 @@ constructSCNN2 = nn_module(
     }
     
     # correction <- self$sclayer(sclagged) 
-    correction <- self$scbn(sclagged)
-    # correction <- torch_einsum('nf,of->no', list(correction, self$scweight))
-    correction <- nnf_leaky_relu(self$sclayer1(correction))
-    correction <- nnf_leaky_relu(self$sclayer2(correction))
-    correction <- nnf_leaky_relu(self$sclayer3(correction))
+    # correction <- self$scbn(sclagged)
+    correction <- sclagged
+    correction <- torch_einsum('nf,of->no', list(correction, self$scweight))
+    # correction <- nnf_leaky_relu(self$sclayer1(correction))
+    # correction <- nnf_leaky_relu(self$sclayer2(correction))
+    # correction <- nnf_leaky_relu(self$sclayer3(correction))
     
-    ypredsc <- self$layerTransforms[[length(self$layerSizes)]](xout + correction)
+    if(as.array(applyCorrection[1]==1)){
+      ypredsc <- self$layerTransforms[[length(self$layerSizes)]](xout + correction)
+    }else{
+      ypredsc <- self$layerTransforms[[length(self$layerSizes)]](xout)
+    }
     ypredsc
   }
 )
