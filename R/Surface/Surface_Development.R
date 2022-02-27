@@ -7,7 +7,7 @@ rm(list=ls());gc()
 tempFilePath <- "C:/Users/stane/M6temp"
 source("R/QuantilePrediction/QuantilePrediction_Helpers.R")
 source("R/MetaModel/MetaModel.R")
-
+source("R/Surface/Surface.R")
 
 K <- 1
 NTrain <- 100
@@ -65,6 +65,7 @@ criterion = function(y_pred,y) {mean((y_pred-y)^2)}
 inputSize <- K
 # layerSizes <- c(1)
 layerSizes <- c(64,8,1)
+layerSizes <- c(32,8,1)
 # layerSizes <- c(8,1)
 layerDropouts <- c(rep(0, length(layerSizes)-1),0)
 # layerDropouts <- NULL
@@ -84,109 +85,7 @@ message(round(loss_validation_base,4))
 
 
 
-# nn_linearAlt <- nn_module(
-#   initialize = function(in_features, out_features, bias = T) {
-#     initRange <- 1/sqrt(in_features)
-#     self$weight = nn_parameter(torch_tensor(matrix(runif(in_features * out_features, -initRange, initRange), nrow = out_features, ncol = in_features)))
-#     if(bias){
-#       self$bias = nn_parameter(torch_tensor(runif(out_features, -initRange, initRange)))
-#     }else{
-#       self$bias = NULL
-#     }
-#   },
-#   forward = function(input) {
-#     nnf_linear(input, weight = self$weight, bias = self$bias)
-#   }
-# )
-
-fourrier = function(points, theta0, thetac, thetas){
-  M <- thetac$size(1)
-  N <- thetac$size(2)
-  x <- torch_tensor(matrix(seq(0, 2 * pi, length.out = points + 1)[1:points],ncol = points, nrow = M, byrow = T), dtype = torch_float())
-  out <- theta0$unsqueeze(2) + Reduce("+",lapply(1:N, function(n) thetac[,n]$unsqueeze(2) * torch_cos(x*n) + thetas[,n]$unsqueeze(2) * torch_sin(x*n)))
-  return(out)
-}
-
-in_features = 1
-out_features =100
-in_N = 2
-out_N = 10
-type = "DC"
-bias = T
-self <- list()
-
-nn_surface <- nn_module(
-  initialize = function(in_features, out_features, in_N, out_N, type, bias = T) {
-    initRange <- .01
-    self$in_features <- in_features
-    self$out_features <- out_features
-    self$in_N <- in_N
-    self$out_N <- out_N
-    self$type <- type
-    self$includeBias <- bias
-    switch (type,
-            "CD" = {
-              self$theta0 <- nn_parameter(torch_tensor(rep(0, out_features)))
-              self$thetac <- nn_parameter(torch_tensor(matrix(runif(in_N * out_features, -initRange, initRange), ncol = in_N)))
-              self$thetas <- nn_parameter(torch_tensor(matrix(runif(in_N * out_features, -initRange, initRange), ncol = in_N)))
-              if(self$includeBias == T){
-                self$bias = nn_parameter(torch_tensor(runif(out_features, -initRange, initRange)))
-              }
-            },
-            "CC" = {
-              if(self$includeBias == T){
-                M <- (1 + self$in_N * 2) + 1
-              }else{
-                M <- (1 + self$in_N * 2)
-              }
-              self$theta0 <- nn_parameter(torch_tensor(rep(0, M)))
-              self$thetac <- nn_parameter(torch_tensor(matrix(runif(M * out_N, -initRange, initRange), ncol = out_N)))
-              self$thetas <- nn_parameter(torch_tensor(matrix(runif(M * out_N, -initRange, initRange), ncol = out_N)))
-            },
-            "DC" = {
-              if(self$includeBias == T){
-                M <- self$in_features + 1
-              }else{
-                M <- self$in_features
-              }
-              self$theta0 <- nn_parameter(torch_tensor(rep(0, M)))
-              self$thetac <- nn_parameter(torch_tensor(matrix(runif(M * out_N, -initRange, initRange), ncol = out_N)))
-              self$thetas <- nn_parameter(torch_tensor(matrix(runif(M * out_N, -initRange, initRange), ncol = out_N)))
-            }
-    )
-  },
-  forward = function(input) {
-    switch (self$type,
-            "CD" = {
-              weight <- fourrier(self$in_features, self$theta0, self$thetac, self$thetas)
-              bias <- self$bias
-            },
-            "CC" = {
-              temp <- fourrier(self$out_features, self$theta0, self$thetac, self$thetas)$transpose(1,2)
-              theta0 <- temp[,1]
-              thetac <- temp[,(1 + 1):(1 + self$in_N)]
-              thetas <- temp[,(1 + self$in_N + 1):(1 + self$in_N + self$in_N)]
-              weight <- fourrier(self$in_features, theta0, thetac, thetas)
-              if(self$includeBias == T){
-                bias <- temp[,(1 + 2 * self$in_N + 1)]
-              }else{
-                bias <- NULL
-              }
-            },
-            "DC" = {
-              temp <- fourrier(self$out_features, self$theta0, self$thetac, self$thetas)$transpose(1,2)
-              weight <- temp[,1:self$in_features]
-              if(self$includeBias == T){
-                bias <- temp[,(self$in_features + 1)]
-              }else{
-                bias <- NULL
-              }
-            }
-    )
-    nnf_linear(input, weight = weight, bias = self$bias)
-  }
-)
-
+# Fourier surface -------------------------------------------------------------------------------------------------------------------------------
 
 constructFFNNAlt = nn_module(
   initialize = function(inputSize, layerSizes, layerTransforms, types, in_Ns, out_Ns) {
@@ -194,9 +93,7 @@ constructFFNNAlt = nn_module(
     self$layerTransforms <- layerTransforms
     self$layerSizesAll <- c(inputSize, layerSizes)
     for(i in seq_along(self$layerSizes)){
-      # self[[str_c("layer_",i)]] <- nn_linear(self$layerSizesAll[i], self$layerSizesAll[i+1])
-      # self[[str_c("layer_",i)]] <- nn_linearAlt(self$layerSizesAll[i], self$layerSizesAll[i+1])
-      self[[str_c("layer_",i)]] <- nn_surface(self$layerSizesAll[i], self$layerSizesAll[i+1], in_N = in_Ns[i], out_N = out_Ns[i], type = types[i])
+      self[[str_c("layer_",i)]] <- nn_surfaceFourier(self$layerSizesAll[i], self$layerSizesAll[i+1], in_N = in_Ns[i], out_N = out_Ns[i], type = types[i])
     }
   },
   forward = function(x) {
@@ -207,20 +104,58 @@ constructFFNNAlt = nn_module(
   }
 )
 # layerSizes <- c(64,8,1)
-layerSizes <- c(200,200,1)
-layerSizes <- c(200,1)
+layerSizes <- c(100,100,1)
+# layerSizes <- c(200,1)
 layerTransforms <- c(lapply(seq_len(length(layerSizes)-1), function(x)  nnf_leaky_relu), list(function(x) {x}))
-# types <- c("CC", rep("CC", length(layerSizes)-2), "CD")
 types <- c("DC", rep("CC", length(layerSizes)-2), "CD")
-# in_Ns <- c(10, 10, 10)
-# out_Ns <- c(30, 10, 10)
-in_Ns <- c(10, 50)
-out_Ns <- c(50, 10)
+in_Ns <- c(10, 5, 10)
+out_Ns <- c(10, 5, 10)
+# in_Ns <- c(10, 5)
+# out_Ns <- c(5, 10)
 baseModel <- constructFFNNAlt(inputSize, layerSizes, layerTransforms, types, in_Ns, out_Ns)
 baseModel
 lr = 0.0005
 weight_decay = 0
-fit <- trainModel(model = baseModel, criterion, train = train[1:2], test = test[1:2], validation = validation[1:2], epochs = 500, minibatch = 1000, tempFilePath = tempFilePath, patience = 5, printEvery = 1, lr = lr, weight_decay = weight_decay)
+fit <- trainModel(model = baseModel, criterion, train = train[1:2], test = test[1:2], validation = validation[1:2], epochs = 500, minibatch = 100, tempFilePath = tempFilePath, patience = 10, printEvery = 1, lr = lr, weight_decay = weight_decay)
+baseModel <- fit$model
+baseModelProgress <- fit$progress
+y_pred_base <- baseModel(validation$x)
+loss_validation_base <- as.array(criterion(y_pred_base,validation$y))
+message(round(loss_validation_base,4))
+
+
+# Bilinear surface -------------------------------------------------------------------------------------------------------------------------------
+
+constructFFNNAlt = nn_module(
+  initialize = function(inputSize, layerSizes, layerTransforms, in_Ns, out_Ns) {
+    self$layerSizes <- layerSizes
+    self$layerTransforms <- layerTransforms
+    self$layerSizesAll <- c(inputSize, layerSizes)
+    for(i in seq_along(self$layerSizes)){
+      self[[str_c("layer_",i)]] <- nn_surfaceBilinear(self$layerSizesAll[i], self$layerSizesAll[i+1], in_N = in_Ns[i], out_N = out_Ns[i])
+    }
+  },
+  forward = function(x) {
+    for(i in seq_along(self$layerSizes)){
+      x <- self$layerTransforms[[i]](self[[str_c("layer_",i)]](x))
+    }
+    x
+  }
+)
+# layerSizes <- c(64,8,1)
+layerSizes <- c(100,100,1)
+# layerSizes <- c(200,1)
+layerTransforms <- c(lapply(seq_len(length(layerSizes)-1), function(x)  nnf_leaky_relu), list(function(x) {x}))
+types <- c("DC", rep("CC", length(layerSizes)-2), "CD")
+in_Ns <- c(10, 10, 5)
+out_Ns <- c(40, 5, 10)
+# in_Ns <- c(10, 5)
+# out_Ns <- c(5, 10)
+baseModel <- constructFFNNAlt(inputSize, layerSizes, layerTransforms, in_Ns, out_Ns)
+baseModel
+lr = 0.0005
+weight_decay = 0
+fit <- trainModel(model = baseModel, criterion, train = train[1:2], test = test[1:2], validation = validation[1:2], epochs = 500, minibatch = 100, tempFilePath = tempFilePath, patience = 10, printEvery = 1, lr = lr, weight_decay = weight_decay)
 baseModel <- fit$model
 baseModelProgress <- fit$progress
 y_pred_base <- baseModel(validation$x)
@@ -230,6 +165,13 @@ message(round(loss_validation_base,4))
 
 
 
+weight <- baseModel$state_dict()$layer_2.weightPar[1,1,,]
+md <- melt(as.data.table(as.array(weight))[,Out := 1:.N], id.vars = "Out")
+md[,In := as.numeric(str_sub(variable,2,-1))]
+ggplot(md,aes(x=In,y=reorder(Out, -Out),fill=value))+
+  geom_tile()+ 
+  geom_text(aes(label = round(value,3)), size=2.5)+
+  scale_fill_gradient2(low = "red",mid = "white",high = "blue") +coord_fixed() 
 
 
 
@@ -239,13 +181,285 @@ message(round(loss_validation_base,4))
 
 
 
+
+# constructFFNN = nn_module(
+#   initialize = function(inputSize, layerSizes, layerTransforms, layerDropouts = NULL, layerTypes = NULL, in_Ns = NULL, out_Ns = NULL) {
+#     self$layerSizes <- layerSizes
+#     self$layerTransforms <- layerTransforms
+#     self$layerSizesAll <- c(inputSize, layerSizes)
+#     self$Dropout <- !is.null(layerDropouts)
+#     if(is.null(layerTypes)){
+#       layerTypes <- rep("nn_linear", length(layerSizes))
+#     }
+#     for(i in seq_along(self$layerSizes)){
+#       self[[str_c("layer_",i)]] <- nn_linear(self$layerSizesAll[i], self$layerSizesAll[i+1])
+#     }
+#     if(self$Dropout){
+#       for(i in seq_along(self$layerSizes)){
+#         self[[str_c("layerDropout_",i)]] <- nn_dropout(p=layerDropouts[i])
+#       }
+#     }
+#   },
+#   forward = function(x) {
+#     for(i in seq_along(self$layerSizes)){
+#       x <- self$layerTransforms[[i]](self[[str_c("layer_",i)]](x))
+#       if(self$Dropout){
+#         x <- self[[str_c("layerDropout_",i)]](x)
+#       }
+#     }
+#     x
+#   },
+#   fforward = function(x,state){
+#     for(i in seq_along(self$layerSizes)){
+#       x <- self$layerTransforms[[i]](nnf_linear(x, weight = state[[str_c("layer_",i,".weight")]], bias = state[[str_c("layer_",i,".bias")]]))
+#     }
+#     x
+#   }
+# )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# 
+# 
+# md <- melt(as.data.table(as.array(weight))[,Out := 1:.N], id.vars = "Out")
+# md[,In := as.numeric(str_sub(variable,2,-1))]
+# ggplot(md,aes(x=In,y=Out,fill=value))+
+#   geom_tile()+ 
+#   scale_fill_gradient2(low = "red",mid = "white",high = "blue") +coord_fixed()
+# 
+# 
+
+
+
+nn_surfaceBilinear <- nn_module(
+  initialize = function(in_features, out_features, in_N, out_N, bias = T) {
+    initRange <- 1/sqrt(in_features)
+    self$in_features <- in_features
+    self$out_features <- out_features
+    self$in_N <- min(in_N, in_features)
+    self$out_N <- min(out_N, out_features)
+    self$includeBias <- bias
+    
+    self$weightPar <- nn_parameter(torch_tensor(matrix(runif(self$in_N * self$out_N, -initRange, initRange), ncol=self$in_N, nrow = self$out_N))$unsqueeze(1)$unsqueeze(1))
+    if(self$includeBias){
+      self$biasPar <- nn_parameter(torch_tensor(matrix(runif(self$out_N, -initRange, initRange), ncol=1, nrow = self$out_N))$unsqueeze(1)$unsqueeze(1))
+    }
+  },
+  forward = function(input) {
+    weight <- nnf_interpolate(self$weightPar ,size = c(self$out_features, self$in_features), mode = "bilinear", align_corners = T)[1,1,,]
+    if(self$includeBias){
+      bias <- nnf_interpolate(self$biasPar ,size = c(self$out_features, 1), mode = "bilinear", align_corners = T)[1,1,,1]
+    }else{
+      bias <- NULL
+    }
+    nnf_linear(input, weight = weight, bias = bias)
+  }
+)
+
+
+in_features = 10
+out_features =20
+in_N = 2
+out_N = 3
+bias = T
+
+temp <- nn_surfaceBilinear(in_features, out_features, in_N, out_N, bias = T)
+input <- torch_tensor(matrix(rnorm(in_features * 1),nrow=1))
+temp(input)
+
+
+initRange <- 1/sqrt(in_features)
+self <- list()
+
+self$weightPar <- nn_parameter(torch_tensor(matrix(runif(in_N * out_N, -initRange, initRange), ncol=in_N, nrow = out_N))$unsqueeze(1)$unsqueeze(1))
+self$biasPar <- nn_parameter(torch_tensor(matrix(runif(out_N, -initRange, initRange), ncol=1, nrow = out_N))$unsqueeze(1)$unsqueeze(1))
+
+
+weight <- nnf_interpolate(self$weightPar ,size = c(out_features, in_features), mode = "bilinear", align_corners = T)[1,1,,]
+bias <- nnf_interpolate(self$biasPar ,size = c(out_features, 1), mode = "bilinear", align_corners = T)[1,1,,1]
 
 
 md <- melt(as.data.table(as.array(weight))[,Out := 1:.N], id.vars = "Out")
 md[,In := as.numeric(str_sub(variable,2,-1))]
-ggplot(md,aes(x=In,y=Out,fill=value))+
+ggplot(md,aes(x=In,y=reorder(Out, -Out),fill=value))+
   geom_tile()+ 
-  scale_fill_gradient2(low = "red",mid = "white",high = "blue") +coord_fixed()
+  geom_text(aes(label = round(value,3)), size=2.5)+
+  scale_fill_gradient2(low = "red",mid = "white",high = "blue") +coord_fixed() 
+
+
+
+
+
+
+input <- torch_rand(1, 1, 10, 2)
+iinput <- nnf_interpolate(input ,size = c(20,20), mode = "bilinear", align_corners = T)
+as.array(input[1,1,,])
+weight <- as.array(iinput[1,1,,])
+
+md <- melt(as.data.table(as.array(weight))[,Out := 1:.N], id.vars = "Out")
+md[,In := as.numeric(str_sub(variable,2,-1))]
+ggplot(md,aes(x=In,y=reorder(Out, -Out),fill=value))+
+  geom_tile()+ 
+  geom_text(aes(label = round(value,3)), size=2.5)+
+  scale_fill_gradient2(low = "red",mid = "white",high = "blue") +coord_fixed() 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# fourrier = function(points, theta0, thetac, thetas){
+#   M <- thetac$size(1)
+#   N <- thetac$size(2)
+#   x <- torch_tensor(matrix(seq(0, 2 * pi, length.out = points + 1)[1:points],ncol = points, nrow = M, byrow = T), dtype = torch_float())
+#   out <- theta0$unsqueeze(2) + Reduce("+",lapply(1:N, function(n) thetac[,n]$unsqueeze(2) * torch_cos(x*n) + thetas[,n]$unsqueeze(2) * torch_sin(x*n)))
+#   return(out)
+# }
+# 
+# nn_surface <- nn_module(
+#   initialize = function(in_features, out_features, in_N, out_N, type, bias = T) {
+#     initRange <- .01
+#     self$in_features <- in_features
+#     self$out_features <- out_features
+#     self$in_N <- in_N
+#     self$out_N <- out_N
+#     self$type <- type
+#     self$includeBias <- bias
+#     switch (type,
+#             "CD" = {
+#               self$theta0 <- nn_parameter(torch_tensor(rep(0, out_features)))
+#               self$thetac <- nn_parameter(torch_tensor(matrix(runif(in_N * out_features, -initRange, initRange), ncol = in_N)))
+#               self$thetas <- nn_parameter(torch_tensor(matrix(runif(in_N * out_features, -initRange, initRange), ncol = in_N)))
+#               if(self$includeBias == T){
+#                 self$bias = nn_parameter(torch_tensor(runif(out_features, -initRange, initRange)))
+#               }
+#             },
+#             "CC" = {
+#               if(self$includeBias == T){
+#                 M <- (1 + self$in_N * 2) + 1
+#               }else{
+#                 M <- (1 + self$in_N * 2)
+#               }
+#               self$theta0 <- nn_parameter(torch_tensor(rep(0, M)))
+#               self$thetac <- nn_parameter(torch_tensor(matrix(runif(M * out_N, -initRange, initRange), ncol = out_N)))
+#               self$thetas <- nn_parameter(torch_tensor(matrix(runif(M * out_N, -initRange, initRange), ncol = out_N)))
+#             },
+#             "DC" = {
+#               if(self$includeBias == T){
+#                 M <- self$in_features + 1
+#               }else{
+#                 M <- self$in_features
+#               }
+#               self$theta0 <- nn_parameter(torch_tensor(rep(0, M)))
+#               self$thetac <- nn_parameter(torch_tensor(matrix(runif(M * out_N, -initRange, initRange), ncol = out_N)))
+#               self$thetas <- nn_parameter(torch_tensor(matrix(runif(M * out_N, -initRange, initRange), ncol = out_N)))
+#             }
+#     )
+#   },
+#   forward = function(input) {
+#     switch (self$type,
+#             "CD" = {
+#               weight <- fourrier(self$in_features, self$theta0, self$thetac, self$thetas)
+#               bias <- self$bias
+#             },
+#             "CC" = {
+#               temp <- fourrier(self$out_features, self$theta0, self$thetac, self$thetas)$transpose(1,2)
+#               theta0 <- temp[,1]
+#               thetac <- temp[,(1 + 1):(1 + self$in_N)]
+#               thetas <- temp[,(1 + self$in_N + 1):(1 + self$in_N + self$in_N)]
+#               weight <- fourrier(self$in_features, theta0, thetac, thetas)
+#               if(self$includeBias == T){
+#                 bias <- temp[,(1 + 2 * self$in_N + 1)]
+#               }else{
+#                 bias <- NULL
+#               }
+#             },
+#             "DC" = {
+#               temp <- fourrier(self$out_features, self$theta0, self$thetac, self$thetas)$transpose(1,2)
+#               weight <- temp[,1:self$in_features]
+#               if(self$includeBias == T){
+#                 bias <- temp[,(self$in_features + 1)]
+#               }else{
+#                 bias <- NULL
+#               }
+#             }
+#     )
+#     nnf_linear(input, weight = weight, bias = self$bias)
+#   }
+# )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+N <- 10
+points <- 20
+y <- rnorm(5,0,1)
+yposition <- seq(0,1,length.out = length(y))
+x <- seq(0,1,length.out = points)
+
+
+nnf_interpolate(torch_tensor(y),size = )
+
+y <- matrix(rnorm(10),5)
+input <- torch_tensor(y)
+input <- input$unsqueeze(3)
+yint <- nnf_interpolate(input,size = c(1,10,1))
+as.array(yint)
+
+
+
+
+
+
+
+
+
+
 
 
 
