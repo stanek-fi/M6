@@ -206,32 +206,32 @@ mesaModels <- vector(mode = "list", length = J)
 mesaModelsProgress <- vector(mode = "list", length = J)
 loss_validation_mesa <- rep(NA,J)
 
-for (j in seq_len(J)){
-  if(j %% 100 == 0){
-    print(str_c("j: ", j, " Time:", Sys.time()))
-  }
-  mesaModel <- metaModel$MesaModel(metaModel)()
-  rows_train <- xtype_train$indices()[2,] == (j-1)
-  x_train_subset <- x_train[rows_train,]
-  y_train_subset <- y_train[rows_train,]
-  rows_test <- xtype_test$indices()[2,] == (j-1)
-  x_test_subset <- x_test[rows_test,]
-  y_test_subset <- y_test[rows_test,]
-  rows_validation <- xtype_validation$indices()[2,] == (j-1)
-  x_validation_subset <- x_validation[rows_validation,]
-  y_validation_subset <- y_validation[rows_validation,]
-  train <- list(torch_cat(list(y_train_subset, y_test_subset), 1), torch_cat(list(x_train_subset, x_test_subset), 1))
-  # train <- list(y_test_subset, x_test_subset)
-  # test <- list(y_test_subset, x_test_subset)
-  if(nrow(train[[1]])>0){
-    fit <- trainModel(model = mesaModel, criterion, train, epochs = 10, minibatch = Inf, tempFilePath = NULL, patience = Inf, printEvery = Inf)
-    mesaModel <- fit$model
-    mesaModelsProgress[[j]] <- fit$progress
-  }
-  mesaModels[[j]] <- mesaModel
-  y_pred_mesa <- mesaModel(x_validation_subset)
-  loss_validation_mesa[j] <- as.array(ComputeRPSTensor(y_pred_mesa,y_validation_subset))
-}
+# for (j in seq_len(J)){
+#   if(j %% 100 == 0){
+#     print(str_c("j: ", j, " Time:", Sys.time()))
+#   }
+#   mesaModel <- metaModel$MesaModel(metaModel)()
+#   rows_train <- xtype_train$indices()[2,] == (j-1)
+#   x_train_subset <- x_train[rows_train,]
+#   y_train_subset <- y_train[rows_train,]
+#   rows_test <- xtype_test$indices()[2,] == (j-1)
+#   x_test_subset <- x_test[rows_test,]
+#   y_test_subset <- y_test[rows_test,]
+#   rows_validation <- xtype_validation$indices()[2,] == (j-1)
+#   x_validation_subset <- x_validation[rows_validation,]
+#   y_validation_subset <- y_validation[rows_validation,]
+#   train <- list(torch_cat(list(y_train_subset, y_test_subset), 1), torch_cat(list(x_train_subset, x_test_subset), 1))
+#   # train <- list(y_test_subset, x_test_subset)
+#   # test <- list(y_test_subset, x_test_subset)
+#   if(nrow(train[[1]])>0){
+#     fit <- trainModel(model = mesaModel, criterion, train, epochs = 10, minibatch = Inf, tempFilePath = NULL, patience = Inf, printEvery = Inf)
+#     mesaModel <- fit$model
+#     mesaModelsProgress[[j]] <- fit$progress
+#   }
+#   mesaModels[[j]] <- mesaModel
+#   y_pred_mesa <- mesaModel(x_validation_subset)
+#   loss_validation_mesa[j] <- as.array(ComputeRPSTensor(y_pred_mesa,y_validation_subset))
+# }
 
 temp <- rbind(
   melt(baseModelProgress[1:which.min(loss_test)],id.vars = "epoch")[,type := "base"],

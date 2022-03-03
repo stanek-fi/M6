@@ -113,7 +113,69 @@ ComputeSharpTensor <- function(weights, y, eps = 0) {
   RET <- torch_einsum("nkt,nk->nt",list(y,weights))
   ret <- torch_log(RET + 1)
   sret <- ret$sum(2)
-  # sdp <- torch_std(ret,dim=2, unbiased=TRUE)
-  sdp <- 1
+  sdp <- torch_std(ret,dim=2, unbiased=TRUE)
+  # sdp <- 1
   ((21*12) / sqrt(252)) * (1/20) * sret/ (sdp + eps)
 }
+
+
+
+nn_linearCustom <- nn_module(
+  initialize = function(in_features, out_features, bias = T, weightInit = NULL, biasInit =NULL, initRange = NULL, const = 0) {
+    self$const <- const
+    if(is.null(initRange)){
+      initRange <- 1/sqrt(in_features)
+    }
+    if(is.null(weightInit)){
+      self$weight = nn_parameter(torch_tensor(matrix(runif(in_features * out_features, -initRange, initRange), nrow = out_features, ncol = in_features)))
+    }else{
+      self$weight = nn_parameter(torch_tensor(matrix(weightInit, nrow = out_features, ncol = in_features)))
+    }
+    if(bias){
+      if(is.null(biasInit)){
+        self$bias = nn_parameter(torch_tensor(runif(out_features, -initRange, initRange)))
+      }else{
+        self$bias = nn_parameter(torch_tensor(rep(biasInit,out_features)))
+      }
+    }else{
+      self$bias = NULL
+    }
+  },
+  forward = function(input) {
+    nnf_linear(input, weight = self$weight, bias = self$bias) +  self$const
+  }
+)
+
+
+# 
+# in_features <- 5
+# out_features <- 1
+# self <- list()
+# restriction <- c(-1,1,1,1,2)
+nn_linearRestricted <- nn_module(
+  initialize = function(in_features, out_features, restriction, bias = T, weightInit = NULL, biasInit =NULL, initRange = NULL) {
+    self$restriction <- torch_tensor(matrix(restriction,ncol=in_features))
+    if(is.null(initRange)){
+      initRange <- 1/sqrt(in_features)
+    }
+    if(is.null(weightInit)){
+      self$weight = nn_parameter(torch_tensor(runif(1, -initRange, initRange)))
+    }else{
+      self$weight = nn_parameter(torch_tensor(weightInit))
+    }
+    if(bias){
+      if(is.null(biasInit)){
+        self$bias = nn_parameter(torch_tensor(runif(out_features, -initRange, initRange)))
+      }else{
+        self$bias = nn_parameter(torch_tensor(rep(biasInit,out_features)))
+      }
+    }else{
+      self$bias = NULL
+    }
+  },
+  forward = function(input) {
+    weight <- self$weight * self$restriction
+    nnf_linear(input, weight = weight, bias = self$bias)
+  }
+)
+

@@ -16,7 +16,7 @@ NValidation <- 5000
 M <- 100
 sd <- 2
 minLoss <- sd^2
-thetas <- lapply(1:M, function(x) {max(rnorm(1,1,0),0)})
+thetas <- lapply(1:M, function(x) {max(rnorm(1,1,0.2),0)})
 
 f <- function(x,theta){
   # x %*% theta
@@ -71,7 +71,7 @@ layerDropouts <- c(rep(0, length(layerSizes)-1),0)
 # layerDropouts <- NULL
 layerTransforms <- c(lapply(seq_len(length(layerSizes)-1), function(x) nnf_leaky_relu), list(function(x) {x}))
 baseModel <- constructFFNN(inputSize, layerSizes, layerTransforms, layerDropouts)
-
+baseModel <- prepareBaseModel(baseModel, train$x)
 
 lr = 0.001
 weight_decay = 0
@@ -84,36 +84,29 @@ message(round(loss_validation_base,4))
 
 
 
+metaModel <- MetaModel(baseModel, train$xtype, mesaParameterSize = 1, allowBias = T, pDropout = 0)
+minibatch <- function() {minibatchSampler(10,train$xtype)}
+lr = 0.001
+weight_decay = 0
+# weight_decay = 1e-5
+# weight_decay = 10
+fit <- trainModel(model = metaModel, criterion, train, test, validation, epochs = 200, minibatch = minibatch, tempFilePath = tempFilePath, patience = 5, printEvery = 1, lr = lr , weight_decay = weight_decay)
+metaModel <- fit$model
+metaModelProgress <- fit$progress
+y_pred_meta <- metaModel(validation$x, validation$xtype)
+loss_validation_meta <- as.array(criterion(y_pred_meta,validation$y))
+message(str_c(round(loss_validation_meta,4), " ", round((loss_validation_meta - loss_validation_base)/(loss_validation_base - minLoss),4)))
+
 
 # Fourier surface -------------------------------------------------------------------------------------------------------------------------------
 
-constructFFNNAlt = nn_module(
-  initialize = function(inputSize, layerSizes, layerTransforms, types, in_Ns, out_Ns) {
-    self$layerSizes <- layerSizes
-    self$layerTransforms <- layerTransforms
-    self$layerSizesAll <- c(inputSize, layerSizes)
-    for(i in seq_along(self$layerSizes)){
-      self[[str_c("layer_",i)]] <- nn_surfaceFourier(self$layerSizesAll[i], self$layerSizesAll[i+1], in_N = in_Ns[i], out_N = out_Ns[i], type = types[i])
-    }
-  },
-  forward = function(x) {
-    for(i in seq_along(self$layerSizes)){
-      x <- self$layerTransforms[[i]](self[[str_c("layer_",i)]](x))
-    }
-    x
-  }
-)
 # layerSizes <- c(64,8,1)
 layerSizes <- c(100,100,1)
-# layerSizes <- c(200,1)
 layerTransforms <- c(lapply(seq_len(length(layerSizes)-1), function(x)  nnf_leaky_relu), list(function(x) {x}))
-types <- c("DC", rep("CC", length(layerSizes)-2), "CD")
 in_Ns <- c(10, 5, 10)
 out_Ns <- c(10, 5, 10)
-# in_Ns <- c(10, 5)
-# out_Ns <- c(5, 10)
-baseModel <- constructFFNNAlt(inputSize, layerSizes, layerTransforms, types, in_Ns, out_Ns)
-baseModel
+baseModel <- constructFFNSF(inputSize, layerSizes, layerTransforms, in_Ns, out_Ns)
+baseModel <- prepareBaseModel(baseModel, train$x)
 lr = 0.0005
 weight_decay = 0
 fit <- trainModel(model = baseModel, criterion, train = train[1:2], test = test[1:2], validation = validation[1:2], epochs = 500, minibatch = 100, tempFilePath = tempFilePath, patience = 10, printEvery = 1, lr = lr, weight_decay = weight_decay)
@@ -122,37 +115,32 @@ baseModelProgress <- fit$progress
 y_pred_base <- baseModel(validation$x)
 loss_validation_base <- as.array(criterion(y_pred_base,validation$y))
 message(round(loss_validation_base,4))
+
+
+metaModel <- MetaModel(baseModel, train$xtype, mesaParameterSize = 1, allowBias = T, pDropout = 0)
+minibatch <- function() {minibatchSampler(10,train$xtype)}
+lr = 0.001
+weight_decay = 0
+# weight_decay = 1e-5
+# weight_decay = 10
+fit <- trainModel(model = metaModel, criterion, train, test, validation, epochs = 200, minibatch = minibatch, tempFilePath = tempFilePath, patience = 5, printEvery = 1, lr = lr , weight_decay = weight_decay)
+metaModel <- fit$model
+metaModelProgress <- fit$progress
+y_pred_meta <- metaModel(validation$x, validation$xtype)
+loss_validation_meta <- as.array(criterion(y_pred_meta,validation$y))
+message(str_c(round(loss_validation_meta,4), " ", round((loss_validation_meta - loss_validation_base)/(loss_validation_base - minLoss),4)))
 
 
 # Bilinear surface -------------------------------------------------------------------------------------------------------------------------------
 
-constructFFNNAlt = nn_module(
-  initialize = function(inputSize, layerSizes, layerTransforms, in_Ns, out_Ns) {
-    self$layerSizes <- layerSizes
-    self$layerTransforms <- layerTransforms
-    self$layerSizesAll <- c(inputSize, layerSizes)
-    for(i in seq_along(self$layerSizes)){
-      self[[str_c("layer_",i)]] <- nn_surfaceBilinear(self$layerSizesAll[i], self$layerSizesAll[i+1], in_N = in_Ns[i], out_N = out_Ns[i])
-    }
-  },
-  forward = function(x) {
-    for(i in seq_along(self$layerSizes)){
-      x <- self$layerTransforms[[i]](self[[str_c("layer_",i)]](x))
-    }
-    x
-  }
-)
 # layerSizes <- c(64,8,1)
 layerSizes <- c(100,100,1)
-# layerSizes <- c(200,1)
 layerTransforms <- c(lapply(seq_len(length(layerSizes)-1), function(x)  nnf_leaky_relu), list(function(x) {x}))
 types <- c("DC", rep("CC", length(layerSizes)-2), "CD")
-in_Ns <- c(10, 10, 5)
-out_Ns <- c(40, 5, 10)
-# in_Ns <- c(10, 5)
-# out_Ns <- c(5, 10)
-baseModel <- constructFFNNAlt(inputSize, layerSizes, layerTransforms, in_Ns, out_Ns)
-baseModel
+in_Ns <- c(10, 20, 10)
+out_Ns <- c(40, 10, 10)
+baseModel <- constructFFNSB(inputSize, layerSizes, layerTransforms, in_Ns, out_Ns)
+baseModel <- prepareBaseModel(baseModel, train$x)
 lr = 0.0005
 weight_decay = 0
 fit <- trainModel(model = baseModel, criterion, train = train[1:2], test = test[1:2], validation = validation[1:2], epochs = 500, minibatch = 100, tempFilePath = tempFilePath, patience = 10, printEvery = 1, lr = lr, weight_decay = weight_decay)
@@ -163,15 +151,33 @@ loss_validation_base <- as.array(criterion(y_pred_base,validation$y))
 message(round(loss_validation_base,4))
 
 
+metaModel <- MetaModel(baseModel, train$xtype, mesaParameterSize = 1, allowBias = T, pDropout = 0)
+minibatch <- function() {minibatchSampler(10,train$xtype)}
+lr = 0.0001
+weight_decay = 0
+# weight_decay = 1e-5
+# weight_decay = 10
+fit <- trainModel(model = metaModel, criterion, train, test, validation, epochs = 200, minibatch = minibatch, tempFilePath = tempFilePath, patience = 10, printEvery = 1, lr = lr , weight_decay = weight_decay)
+metaModel <- fit$model
+metaModelProgress <- fit$progress
+y_pred_meta <- metaModel(validation$x, validation$xtype)
+loss_validation_meta <- as.array(criterion(y_pred_meta,validation$y))
+message(str_c(round(loss_validation_meta,4), " ", round((loss_validation_meta - loss_validation_base)/(loss_validation_base - minLoss),4)))
 
 
-weight <- baseModel$state_dict()$layer_2.weightPar[1,1,,]
-md <- melt(as.data.table(as.array(weight))[,Out := 1:.N], id.vars = "Out")
-md[,In := as.numeric(str_sub(variable,2,-1))]
-ggplot(md,aes(x=In,y=reorder(Out, -Out),fill=value))+
-  geom_tile()+ 
-  geom_text(aes(label = round(value,3)), size=2.5)+
-  scale_fill_gradient2(low = "red",mid = "white",high = "blue") +coord_fixed() 
+
+
+
+
+
+
+# weight <- baseModel$state_dict()$layer_3.weightPar[1,1,,]
+# md <- melt(as.data.table(as.array(weight))[,Out := 1:.N], id.vars = "Out")
+# md[,In := as.numeric(str_sub(variable,2,-1))]
+# ggplot(md,aes(x=In,y=reorder(Out, -Out),fill=value))+
+#   geom_tile()+ 
+#   geom_text(aes(label = round(value,3)), size=2.5)+
+#   scale_fill_gradient2(low = "red",mid = "white",high = "blue") +coord_fixed() 
 
 
 
@@ -218,19 +224,6 @@ ggplot(md,aes(x=In,y=reorder(Out, -Out),fill=value))+
 # )
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 # 
 # 
 # md <- melt(as.data.table(as.array(weight))[,Out := 1:.N], id.vars = "Out")
@@ -242,86 +235,85 @@ ggplot(md,aes(x=In,y=reorder(Out, -Out),fill=value))+
 # 
 
 
-
-nn_surfaceBilinear <- nn_module(
-  initialize = function(in_features, out_features, in_N, out_N, bias = T) {
-    initRange <- 1/sqrt(in_features)
-    self$in_features <- in_features
-    self$out_features <- out_features
-    self$in_N <- min(in_N, in_features)
-    self$out_N <- min(out_N, out_features)
-    self$includeBias <- bias
-    
-    self$weightPar <- nn_parameter(torch_tensor(matrix(runif(self$in_N * self$out_N, -initRange, initRange), ncol=self$in_N, nrow = self$out_N))$unsqueeze(1)$unsqueeze(1))
-    if(self$includeBias){
-      self$biasPar <- nn_parameter(torch_tensor(matrix(runif(self$out_N, -initRange, initRange), ncol=1, nrow = self$out_N))$unsqueeze(1)$unsqueeze(1))
-    }
-  },
-  forward = function(input) {
-    weight <- nnf_interpolate(self$weightPar ,size = c(self$out_features, self$in_features), mode = "bilinear", align_corners = T)[1,1,,]
-    if(self$includeBias){
-      bias <- nnf_interpolate(self$biasPar ,size = c(self$out_features, 1), mode = "bilinear", align_corners = T)[1,1,,1]
-    }else{
-      bias <- NULL
-    }
-    nnf_linear(input, weight = weight, bias = bias)
-  }
-)
-
-
-in_features = 10
-out_features =20
-in_N = 2
-out_N = 3
-bias = T
-
-temp <- nn_surfaceBilinear(in_features, out_features, in_N, out_N, bias = T)
-input <- torch_tensor(matrix(rnorm(in_features * 1),nrow=1))
-temp(input)
-
-
-initRange <- 1/sqrt(in_features)
-self <- list()
-
-self$weightPar <- nn_parameter(torch_tensor(matrix(runif(in_N * out_N, -initRange, initRange), ncol=in_N, nrow = out_N))$unsqueeze(1)$unsqueeze(1))
-self$biasPar <- nn_parameter(torch_tensor(matrix(runif(out_N, -initRange, initRange), ncol=1, nrow = out_N))$unsqueeze(1)$unsqueeze(1))
-
-
-weight <- nnf_interpolate(self$weightPar ,size = c(out_features, in_features), mode = "bilinear", align_corners = T)[1,1,,]
-bias <- nnf_interpolate(self$biasPar ,size = c(out_features, 1), mode = "bilinear", align_corners = T)[1,1,,1]
-
-
-md <- melt(as.data.table(as.array(weight))[,Out := 1:.N], id.vars = "Out")
-md[,In := as.numeric(str_sub(variable,2,-1))]
-ggplot(md,aes(x=In,y=reorder(Out, -Out),fill=value))+
-  geom_tile()+ 
-  geom_text(aes(label = round(value,3)), size=2.5)+
-  scale_fill_gradient2(low = "red",mid = "white",high = "blue") +coord_fixed() 
-
-
-
-
-
-
-input <- torch_rand(1, 1, 10, 2)
-iinput <- nnf_interpolate(input ,size = c(20,20), mode = "bilinear", align_corners = T)
-as.array(input[1,1,,])
-weight <- as.array(iinput[1,1,,])
-
-md <- melt(as.data.table(as.array(weight))[,Out := 1:.N], id.vars = "Out")
-md[,In := as.numeric(str_sub(variable,2,-1))]
-ggplot(md,aes(x=In,y=reorder(Out, -Out),fill=value))+
-  geom_tile()+ 
-  geom_text(aes(label = round(value,3)), size=2.5)+
-  scale_fill_gradient2(low = "red",mid = "white",high = "blue") +coord_fixed() 
-
-
-
-
-
-
-
-
+# nn_surfaceBilinear <- nn_module(
+#   initialize = function(in_features, out_features, in_N, out_N, bias = T) {
+#     initRange <- 1/sqrt(in_features)
+#     self$in_features <- in_features
+#     self$out_features <- out_features
+#     self$in_N <- min(in_N, in_features)
+#     self$out_N <- min(out_N, out_features)
+#     self$includeBias <- bias
+#     
+#     self$weightPar <- nn_parameter(torch_tensor(matrix(runif(self$in_N * self$out_N, -initRange, initRange), ncol=self$in_N, nrow = self$out_N))$unsqueeze(1)$unsqueeze(1))
+#     if(self$includeBias){
+#       self$biasPar <- nn_parameter(torch_tensor(matrix(runif(self$out_N, -initRange, initRange), ncol=1, nrow = self$out_N))$unsqueeze(1)$unsqueeze(1))
+#     }
+#   },
+#   forward = function(input) {
+#     weight <- nnf_interpolate(self$weightPar ,size = c(self$out_features, self$in_features), mode = "bilinear", align_corners = T)[1,1,,]
+#     if(self$includeBias){
+#       bias <- nnf_interpolate(self$biasPar ,size = c(self$out_features, 1), mode = "bilinear", align_corners = T)[1,1,,1]
+#     }else{
+#       bias <- NULL
+#     }
+#     nnf_linear(input, weight = weight, bias = bias)
+#   }
+# )
+# 
+# 
+# in_features = 10
+# out_features =20
+# in_N = 2
+# out_N = 3
+# bias = T
+# 
+# temp <- nn_surfaceBilinear(in_features, out_features, in_N, out_N, bias = T)
+# input <- torch_tensor(matrix(rnorm(in_features * 1),nrow=1))
+# temp(input)
+# 
+# 
+# initRange <- 1/sqrt(in_features)
+# self <- list()
+# 
+# self$weightPar <- nn_parameter(torch_tensor(matrix(runif(in_N * out_N, -initRange, initRange), ncol=in_N, nrow = out_N))$unsqueeze(1)$unsqueeze(1))
+# self$biasPar <- nn_parameter(torch_tensor(matrix(runif(out_N, -initRange, initRange), ncol=1, nrow = out_N))$unsqueeze(1)$unsqueeze(1))
+# 
+# 
+# weight <- nnf_interpolate(self$weightPar ,size = c(out_features, in_features), mode = "bilinear", align_corners = T)[1,1,,]
+# bias <- nnf_interpolate(self$biasPar ,size = c(out_features, 1), mode = "bilinear", align_corners = T)[1,1,,1]
+# 
+# 
+# md <- melt(as.data.table(as.array(weight))[,Out := 1:.N], id.vars = "Out")
+# md[,In := as.numeric(str_sub(variable,2,-1))]
+# ggplot(md,aes(x=In,y=reorder(Out, -Out),fill=value))+
+#   geom_tile()+ 
+#   geom_text(aes(label = round(value,3)), size=2.5)+
+#   scale_fill_gradient2(low = "red",mid = "white",high = "blue") +coord_fixed() 
+# 
+# 
+# 
+# 
+# 
+# 
+# input <- torch_rand(1, 1, 10, 2)
+# iinput <- nnf_interpolate(input ,size = c(20,20), mode = "bilinear", align_corners = T)
+# as.array(input[1,1,,])
+# weight <- as.array(iinput[1,1,,])
+# 
+# md <- melt(as.data.table(as.array(weight))[,Out := 1:.N], id.vars = "Out")
+# md[,In := as.numeric(str_sub(variable,2,-1))]
+# ggplot(md,aes(x=In,y=reorder(Out, -Out),fill=value))+
+#   geom_tile()+ 
+#   geom_text(aes(label = round(value,3)), size=2.5)+
+#   scale_fill_gradient2(low = "red",mid = "white",high = "blue") +coord_fixed() 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
 
 
 
