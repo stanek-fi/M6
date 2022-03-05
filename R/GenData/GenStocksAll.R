@@ -35,12 +35,17 @@ Stocks <- lapply(seq_along(tickers), function(i) {
   }
   return(out)
 })
-names(Stocks)=tickers
+if(length(Stocks) == length(tickers)){
+  names(Stocks)=tickers
+}else{
+  stop("shorter data")
+}
 print(sum(!sapply(Stocks, function(y) {!is.null(y)})))
 Stocks <- Stocks[sapply(Stocks, function(y) {!is.null(y)})]
 
-if(!all(names(Stocks) == tickers)){
-  warning("Some stock missing")
+
+if(sum(!(tickers %in% names(Stocks)))>0){
+  warning(str_c(sum(!(tickers %in% names(Stocks))), " stock missing"))
 }
 table(as.Date(sapply(Stocks, function(s) s[.N,index])))
 
@@ -68,12 +73,11 @@ saveRDS(StocksClean,file.path("Data","StocksAll.RDS"))
 
 
 # DatasetsGeneration ----------------------------------------------------------
-
 Volatilites <- sapply(StocksClean, function(Stock) {Stock[max((.N-500),1):.N, mean(diff(log(Adjusted))^2,na.rm=T)]})
 for(i in seq_along(Volatilites)){
   StockNames[Symbol == names(Volatilites)[i], Volatility := Volatilites[i]]
 }
-StockNames[,mean(Volatility),.(M6Dataset, ETF)][order(M6Dataset, ETF)]
+# StockNames[,mean(Volatility),.(M6Dataset, ETF)][order(M6Dataset, ETF)]
 
 StockNames[,M6Dataset := ifelse(!is.na(M6Id), 1, 0)]
 ActivityETF <- unlist(StockNames[M6Dataset == 1 & ETF == T, .(mu=mean(Activity, na.rm=T), sd=sd(Activity, na.rm=T))])

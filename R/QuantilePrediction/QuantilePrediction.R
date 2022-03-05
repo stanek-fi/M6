@@ -24,7 +24,7 @@ featureList <- c(
 # Shifts <- c(0)
 Shifts <- c(0,7,14,21)
 # Shifts <- c(0,7)
-Submission = 0
+Submission = 1
 IntervalInfos <- GenIntervalInfos(Submission = Submission, Shifts = Shifts)
 
 GenerateStockAggr <- F
@@ -41,46 +41,39 @@ if(GenerateStockAggr){
   StocksAggr <- readRDS(file.path("Precomputed","StocksAggr.RDS"))
 }
 
-# GenerateStockAggr <- F
-# if(GenerateStockAggr){
-#   StockNames <- readRDS(file.path("Data","StockNames.RDS"))
-#   Stocks <- readRDS(file.path("Data","StocksM6.RDS"))
-#   StocksAggr <- GenStocksAggr(Stocks, IntervalInfos, featureList, CheckLeakage = F)
-#   saveRDS(StocksAggr, file.path("Precomputed","StocksAggr.RDS"))
-# }else{
-#   StocksAggr <- readRDS(file.path("Precomputed","StocksAggr.RDS"))
-# }
-
-# StocksAggr[Interval=="2022-01-17 : 2022-02-13",table(ReturnQuintile),M6Dataset]
-
 featureNames <- names(StocksAggr)[!(names(StocksAggr) %in% c("Ticker", "Interval", "Return", "Shift", "M6Dataset", "ReturnQuintile", "IntervalStart", "IntervalEnd"))]
 StocksAggr <- imputeFeatures(StocksAggr, featureNames = featureNames)
 # StocksAggr <- standartizeFeatures(StocksAggr, featureNames = featureNames)
 StocksAggr <- standartizeFeatures(StocksAggr, featureNames = featureNames[!(featureNames %in% c("ETF"))])
-
-# temp <- as.data.table(model.matrix(~ as.character(StocksAggr$M6Dataset) - 1))
-# StocksAggr <- cbind(StocksAggr,temp)
-# featureNames <- c(featureNames, names(temp))
-# StocksAggr[, MeanETF := mean(ETF) - 0.5,.(Interval,M6Dataset)]
-# featureNames <- c(featureNames, "MeanETF")
-
 StocksAggr <- StocksAggr[order(IntervalStart,Ticker)]
-# StocksAggr <- StocksAggr[ETF>0]
 
-# TrainStart <- as.Date("1990-01-01")
-# TrainStart <- as.Date("1990-01-01")
-# TrainStart <- as.Date("2010-01-01")
+
+
 TrainStart <- as.Date("2000-01-01")
 TrainEnd <- as.Date("2020-01-01")
+# ValidationStart <- as.Date("2021-01-01")
+# ValidationEnd <- as.Date("2022-01-01")
+q <- 0
+ValidationStart <- IntervalInfos[[1]]$IntervalStarts[length(IntervalInfos[[1]]$IntervalStarts) - (12 - Submission) - q]
+ValidationEnd <- IntervalInfos[[1]]$IntervalEnds[length(IntervalInfos[[1]]$IntervalEnds) - (12 - Submission) - q]
 
-# TrainEnd <- as.Date("2021-01-01")
-# ValidationStart <- as.Date("2020-01-01")
-# ValidationEnd <- as.Date("2021-01-01")
-ValidationStart <- as.Date("2021-01-01")
-ValidationEnd <- as.Date("2022-01-01")
-# ValidationStart <- IntervalInfos[[1]]$IntervalStarts[length(IntervalInfos[[1]]$IntervalStarts) - (12 - Submission) - 1]
-# ValidationEnd <- IntervalInfos[[1]]$IntervalEnds[length(IntervalInfos[[1]]$IntervalEnds) - (12 - Submission) - 1]
 
+# TrainStart <- as.Date("2000-01-01")
+# TrainEnd <- as.Date("2020-01-12")
+# q <- 1
+# ValidationStart <- IntervalInfos[[1]]$IntervalStarts[length(IntervalInfos[[1]]$IntervalStarts) - (12 - Submission) - q]
+# ValidationEnd <- IntervalInfos[[1]]$IntervalEnds[length(IntervalInfos[[1]]$IntervalEnds) - (12 - Submission) - q]
+
+# TrainStart <- as.Date("2000-01-01")
+# TrainEnd <- IntervalInfos[[1]]$IntervalEnds[length(IntervalInfos[[1]]$IntervalEnds) - (12 - Submission) - 28]
+# q <- 0
+# ValidationStart <- IntervalInfos[[1]]$IntervalStarts[length(IntervalInfos[[1]]$IntervalStarts) - (12 - Submission) - q]
+# ValidationEnd <- IntervalInfos[[1]]$IntervalEnds[length(IntervalInfos[[1]]$IntervalEnds) - (12 - Submission) - q]
+
+# TrainStart <- as.Date("2000-01-01")
+# TrainEnd <- IntervalInfos[[1]]$IntervalEnds[length(IntervalInfos[[1]]$IntervalEnds) - (12 - Submission) - (28-12)]
+# ValidationStart <- IntervalInfos[[1]]$IntervalStarts[length(IntervalInfos[[1]]$IntervalStarts) - (12 - Submission) - (12-6)]
+# ValidationEnd <- IntervalInfos[[1]]$IntervalEnds[length(IntervalInfos[[1]]$IntervalEnds) - (12 - Submission)]
 
 
 
@@ -156,8 +149,9 @@ loss_validation_base <- as.array(ComputeRPSTensor(y_pred_base,y_validation))
 loss_validation_base_vector <- as.array(ComputeRPSTensorVector(y_pred_base,y_validation))
 loss_validation_base_M6Dataset <- sapply(1:max(ValidationInfo$M6Dataset), function(i) {mean(loss_validation_base_vector[which(ValidationInfo$M6Dataset == i)])})
 
+
 # temp <- cbind(ValidationInfo,RPS = loss_validation_base_vector)
-# # temp <- cbind(TestInfo,RPS = as.array(ComputeRPSTensorVector(baseModel(x_test),y_test)))
+# # # temp <- cbind(TestInfo,RPS = as.array(ComputeRPSTensorVector(baseModel(x_test),y_test)))
 # temp <- temp[,.(RPS = mean(RPS), MV = mean(Return^2)), .(Shift, IntervalStart, M6Dataset)]
 # ggplot(temp, aes(x=IntervalStart,y=RPS,colour=as.factor(M6Dataset)))+
 #   geom_line()+geom_point()+
@@ -169,7 +163,7 @@ r <- 2
 set.seed(r)
 torch_manual_seed(r)
 
-metaModel <- MetaModel(baseModel, xtype_train, mesaParameterSize = 2, allowBias = T, pDropout = 0.1,  initMesaRange = 0, initMetaRange = 0.7)
+metaModel <- MetaModel(baseModel, xtype_train, mesaParameterSize = 2, allowBias = F, pDropout = 0.1,  initMesaRange = 0, initMetaRange = 0.7)
 minibatch <- function() {minibatchSampler(5,xtype_train)}
 # minibatch <- 10000
 lr <- 0.0001

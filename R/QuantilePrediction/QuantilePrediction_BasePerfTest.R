@@ -144,7 +144,7 @@ for(r in 1:R){
   torch_manual_seed(r)
   print(r)
   inputSize <- length(featureNames)
-  layerSizes <- c(20, 8, 5)
+  layerSizes <- c(32, 8, 5)
   # layerSizes <- c(16,8, 5)
   # layerSizes <- c(6,5)
   layerDropouts <- c(rep(0.2, length(layerSizes)-1),0)
@@ -188,6 +188,46 @@ Sys.time()-start
 resM6
 res
 mean(res)
+
+
+
+y_pred_base <- baseModel(x_train)
+as.array(ComputeRPSTensor(y_pred_base,y_train))
+y_pred_base_alt <- y_pred_base
+y_pred_base_alt[,1] <- y_pred_base[,5]
+y_pred_base_alt[,2] <- y_pred_base[,4]
+y_pred_base_alt[,3] <- y_pred_base[,3]
+y_pred_base_alt[,4] <- y_pred_base[,2]
+y_pred_base_alt[,5] <- y_pred_base[,1]
+as.array(ComputeRPSTensor(y_pred_base_alt,y_train))
+
+
+y_pred_base <- baseModel(x_test)
+as.array(ComputeRPSTensor(y_pred_base,y_test))
+y_pred_base_alt <- y_pred_base
+y_pred_base_alt[,1] <- y_pred_base[,5]
+y_pred_base_alt[,2] <- y_pred_base[,4]
+y_pred_base_alt[,3] <- y_pred_base[,3]
+y_pred_base_alt[,4] <- y_pred_base[,2]
+y_pred_base_alt[,5] <- y_pred_base[,1]
+as.array(ComputeRPSTensor(y_pred_base_alt,y_test))
+
+
+y_pred_base <- baseModel(x_validation)
+as.array(ComputeRPSTensor(y_pred_base,y_validation))
+y_pred_base_alt <- y_pred_base
+y_pred_base_alt[,1] <- y_pred_base[,5]
+y_pred_base_alt[,2] <- y_pred_base[,4]
+y_pred_base_alt[,3] <- y_pred_base[,3]
+y_pred_base_alt[,4] <- y_pred_base[,2]
+y_pred_base_alt[,5] <- y_pred_base[,1]
+as.array(ComputeRPSTensor(y_pred_base_alt,y_validation))
+
+
+
+
+
+
 
 # saveRDS(importance_train, file.path("Precomputed", "importance_train.RDS"))
 # saveRDS(importance_test, file.path("Precomputed", "importance_test.RDS"))
