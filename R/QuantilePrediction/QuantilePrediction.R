@@ -24,10 +24,10 @@ featureList <- c(
 # Shifts <- c(0)
 Shifts <- c(0,7,14,21)
 # Shifts <- c(0,7)
-Submission = 1
+Submission = 3
 IntervalInfos <- GenIntervalInfos(Submission = Submission, Shifts = Shifts)
 
-GenerateStockAggr <- F
+GenerateStockAggr <- T
 if(GenerateStockAggr){
   StockNames <- readRDS(file.path("Data","StockNames.RDS"))
   Stocks <- readRDS(file.path("Data","StocksAll.RDS"))
@@ -40,6 +40,8 @@ if(GenerateStockAggr){
 }else{
   StocksAggr <- readRDS(file.path("Precomputed","StocksAggr.RDS"))
 }
+
+# StocksAggr[Shift == 0 & M6Dataset == 1]
 
 featureNames <- names(StocksAggr)[!(names(StocksAggr) %in% c("Ticker", "Interval", "Return", "Shift", "M6Dataset", "ReturnQuintile", "IntervalStart", "IntervalEnd"))]
 StocksAggr <- imputeFeatures(StocksAggr, featureNames = featureNames)
@@ -277,29 +279,29 @@ ggplot(temp, aes(x = epoch, y = value, colour =variable, shape=type))+
 
 
 
-# StocksAggrTrain <- StocksAggr[TrainRows, .SD, .SDcols=names(StocksAggr)[!(names(StocksAggr) %in% featureNames)]][,Split := "Train"][]
-# StocksAggrTest <- StocksAggr[TestRows, .SD, .SDcols=names(StocksAggr)[!(names(StocksAggr) %in% featureNames)]][,Split := "Test"][]
-# StocksAggrValidation <- StocksAggr[ValidationRows, .SD, .SDcols=names(StocksAggr)[!(names(StocksAggr) %in% featureNames)]][,Split := "Validation"][]
-# 
-# QuantilePredictions <- list(
-#   base = rbind(
-#     cbind(StocksAggrTrain, setNames(as.data.table(as.array(baseModel(x_train))), str_c("Rank",1:5))),
-#     cbind(StocksAggrTest, setNames(as.data.table(as.array(baseModel(x_test))), str_c("Rank",1:5))),
-#     cbind(StocksAggrValidation, setNames(as.data.table(as.array(baseModel(x_validation))), str_c("Rank",1:5)))
-#   ),
-#   meta = rbind(
-#     cbind(StocksAggrTrain, setNames(as.data.table(as.array(metaModel(x_train, xtype_train))), str_c("Rank",1:5))),
-#     cbind(StocksAggrTest, setNames(as.data.table(as.array(metaModel(x_test, xtype_test))), str_c("Rank",1:5))),
-#     cbind(StocksAggrValidation, setNames(as.data.table(as.array(metaModel(x_validation, xtype_validation))), str_c("Rank",1:5)))
-#   )
-# )
-# saveRDS(QuantilePredictions, file.path("Precomputed","QuantilePredictions.RDS"))
+StocksAggrTrain <- StocksAggr[TrainRows, .SD, .SDcols=names(StocksAggr)[!(names(StocksAggr) %in% featureNames)]][,Split := "Train"][]
+StocksAggrTest <- StocksAggr[TestRows, .SD, .SDcols=names(StocksAggr)[!(names(StocksAggr) %in% featureNames)]][,Split := "Test"][]
+StocksAggrValidation <- StocksAggr[ValidationRows, .SD, .SDcols=names(StocksAggr)[!(names(StocksAggr) %in% featureNames)]][,Split := "Validation"][]
+
+QuantilePredictions <- list(
+  base = rbind(
+    cbind(StocksAggrTrain, setNames(as.data.table(as.array(baseModel(x_train))), str_c("Rank",1:5))),
+    cbind(StocksAggrTest, setNames(as.data.table(as.array(baseModel(x_test))), str_c("Rank",1:5))),
+    cbind(StocksAggrValidation, setNames(as.data.table(as.array(baseModel(x_validation))), str_c("Rank",1:5)))
+  ),
+  meta = rbind(
+    cbind(StocksAggrTrain, setNames(as.data.table(as.array(metaModel(x_train, xtype_train))), str_c("Rank",1:5))),
+    cbind(StocksAggrTest, setNames(as.data.table(as.array(metaModel(x_test, xtype_test))), str_c("Rank",1:5))),
+    cbind(StocksAggrValidation, setNames(as.data.table(as.array(metaModel(x_validation, xtype_validation))), str_c("Rank",1:5)))
+  )
+)
+saveRDS(QuantilePredictions, file.path("Precomputed","QuantilePredictions.RDS"))
 
 
 
 # cbind(as.array(y_validation),round(as.array(y_pred),3))
-mesaStates1 <- as.vector(as.array(metaModel$state_dict()$mesaLayerWeight))
-mesaStates2 <- sapply(mesaModels, function(x) as.array(x$state_dict()$mesaState))
-ggplot(data.table(mesaStates1,mesaStates2),aes(x=mesaStates1,mesaStates2))+
-  geom_point()
+# mesaStates1 <- as.vector(as.array(metaModel$state_dict()$mesaLayerWeight))
+# mesaStates2 <- sapply(mesaModels, function(x) as.array(x$state_dict()$mesaState))
+# ggplot(data.table(mesaStates1,mesaStates2),aes(x=mesaStates1,mesaStates2))+
+#   geom_point()
 

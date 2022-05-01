@@ -12,7 +12,8 @@ StockNames[,MinDate := as.Date(NA)]
 StockNames[,MaxDate := as.Date(NA)]
 StockNames[,Activity := as.numeric(NA)]
 StockNames[,missings := 0]
-tickers <- StockNames[, Symbol]
+# tickers <- StockNames[, Symbol]
+tickers <- StockNames[M6Dataset>0, Symbol]
   
 
 # Downloading data --------------------------------------------------------
@@ -20,6 +21,7 @@ tickers <- StockNames[, Symbol]
 from = "1970-01-01"
 to = "2023-12-01"
 Stocks <- lapply(seq_along(tickers), function(i) {
+  Sys.sleep(5)
   print(round(i/length(tickers),3))
   ticker <- tickers[i]
   out <- try({
@@ -53,7 +55,7 @@ table(as.Date(sapply(Stocks, function(s) s[.N,index])))
 # Cleaning data -----------------------------------------------------------
 
 plot(Stocks[["IEFM.L"]]$Adjusted) #manually correcting invalid data
-Stocks[["IEFM.L"]][Adjusted<100,Adjusted := NA]
+# Stocks[["IEFM.L"]][Adjusted<100,Adjusted := NA] #not needed anymore
 
 StocksClean<- setNames(lapply(names(Stocks), function(ticker) {
   stock <- Stocks[[ticker]]
@@ -66,6 +68,8 @@ StocksClean<- setNames(lapply(names(Stocks), function(ticker) {
     return(stock)
   }
 }),names(Stocks))
+
+plot(StocksClean[["IEFM.L"]]$Adjusted) 
 
 saveRDS(StocksClean,file.path("Data","StocksAll.RDS"))
 # StocksClean <- readRDS(file.path("Data","StocksAll.RDS"))
