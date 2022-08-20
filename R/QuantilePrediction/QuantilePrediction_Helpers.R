@@ -558,3 +558,267 @@ evaluateImportance <- function(x,f){
 
 
 
+# trainModel <- function(model, criterion, train, test = NULL, validation = NULL, epochs = 10, minibatch = Inf, tempFilePath = NULL, patience = 1, printEvery = Inf, lr = 0.001, weight_decay = 0, isSparse = NULL){
+#   optimizer = optim_adam(model$parameters, lr = lr, weight_decay = weight_decay)
+#   progress <- data.table(
+#     epoch = seq_len(epochs),
+#     loss_train = rep(Inf, epochs),
+#     loss_test = rep(Inf, epochs),
+#     loss_validation = rep(Inf, epochs)
+#   )
+#   if(is.null(isSparse)){
+#     isSparse <- c(rep(F,2), rep(T,length(train) - 2))
+#   }
+#   if(length(minibatch)==1){
+#     minibatch <- lapply(1:epochs, function(e) {minibatch})
+#   }
+#   
+#   for(e in 1:epochs){
+#     
+#     if(is.numeric(minibatch[[e]])){
+#       temp <- sample(seq_len(nrow(train[[2]])))
+#       mbs <- split(temp, ceiling(seq_along(temp)/minibatch[[e]]))
+#     }else{
+#       mbs <- minibatch[[e]]()
+#     }
+#     
+#     model$train()
+#     for(mb in seq_along(mbs)){
+#       rows <- mbs[[mb]]
+#       # x_train_mb <- subsetTensor(x_train, rows = rows)
+#       # y_train_mb <- subsetTensor(y_train, rows = rows)
+#       # xtype_train_mb <- subsetTensor(xtype_train, rows = rows)
+#       # train_mb <- lapply(train, function(x) subsetTensor(x, rows = rows))
+#       train_mb <- lapply(seq_along(train), function(i) subsetTensor(train[[i]], rows = rows, isSparse = isSparse[i]))
+#       
+#       optimizer$zero_grad()
+#       # y_pred_mb = model(x_train_mb, xtype_train_mb)
+#       y_pred_mb = do.call(model, train_mb[-1])
+#       # loss = criterion(y_pred_mb, y_train_mb)
+#       loss = criterion(y_pred_mb, train_mb[[1]])
+#       loss$backward()
+#       optimizer$step()
+#     }
+#     model$eval()
+#     
+#     progress[e, loss_train := as.array(criterion(do.call(model, train[-1]), train[[1]]))]
+#     if(!is.null(test)){
+#       progress[e, loss_test := as.array(criterion(do.call(model, test[-1]), test[[1]]))]
+#     }
+#     if(!is.null(validation)){
+#       progress[e, loss_validation := as.array(criterion(do.call(model, validation[-1]), validation[[1]]))]
+#     }
+#     if(e %% printEvery == 0){
+#       print(str_c("Epoch:", e," train: ", round(progress[e, loss_train], 5)," test:", round(progress[e, loss_test], 5), " validation:", round(progress[e, loss_validation], 5), " Time:", Sys.time()))
+#     }
+#     
+#     if(!is.null(test)){
+#       ebest <- progress[,which.min(loss_test)]
+#       if((e == ebest) & !is.null(tempFilePath)){
+#         torch_save(model,file.path(tempFilePath,str_c("temp",".t7")))
+#       }
+#       if(e - ebest >= patience){
+#         progress <- progress[1:e,]
+#         break()
+#       }
+#     }
+#     
+#   }
+#   
+#   if(!is.null(tempFilePath) & !is.null(test)){
+#     model <- torch_load(file.path(tempFilePath,str_c("temp",".t7")))
+#     file.remove(file.path(tempFilePath,str_c("temp",".t7")))
+#   }
+#   
+#   return(list(
+#     model = model,
+#     progress = progress
+#   ))
+# }
+
+
+trainModel2 <- function(model, criterion, train, test = NULL, validation = NULL, epochs = 10, minibatch = Inf, tempFilePath = NULL, patience = 1, printEvery = Inf, lr = 0.001, weight_decay = 0, isSparse = NULL, optimizerType = "adam", ...){
+  
+  modelOut <- model
+  
+  out <- lapply(seq_along(lr), function(rs) {
+    model <- modelOut
+    
+    optimizer = switch (optimizerType,
+                        "adam" = optim_adam(model$parameters, lr = lr[rs], weight_decay = weight_decay),
+                        "sgd" = optim_sgd(model$parameters, lr = lr[rs], weight_decay = weight_decay),
+                        "adadelta" = optim_adadelta(model$parameters, lr = lr[rs], weight_decay = weight_decay),
+                        "asgd" = optim_asgd(model$parameters, lr = lr[rs], weight_decay = weight_decay),
+                        "lbfgs" = optim_lbfgs(model$parameters, lr = lr[rs]),
+                        "rmsprop" = optim_rmsprop(model$parameters, lr = lr[rs], weight_decay = weight_decay),
+                        "rprop" = optim_rmsprop(model$parameters, lr = lr[rs])
+    )
+    # optimizer = optim_adam(model$parameters, lr = lr, weight_decay = weight_decay)
+    progress <- data.table(
+      epoch = seq_len(epochs),
+      loss_train = rep(Inf, epochs),
+      loss_test = rep(Inf, epochs),
+      loss_validation = rep(Inf, epochs)
+    )
+    if(is.null(isSparse)){
+      isSparse <- c(rep(F,2), rep(T,length(train) - 2))
+    }
+    if(length(minibatch)==1){
+      minibatch <- lapply(1:epochs, function(e) {minibatch})
+    }
+    
+    for(e in 1:epochs){
+      
+      if(is.numeric(minibatch[[e]])){
+        temp <- sample(seq_len(nrow(train[[2]])))
+        mbs <- split(temp, ceiling(seq_along(temp)/minibatch[[e]]))
+      }else{
+        mbs <- minibatch[[e]]()
+      }
+      
+      if(e>1){
+        model$train()
+        for(mb in seq_along(mbs)){
+          rows <- mbs[[mb]]
+          # x_train_mb <- subsetTensor(x_train, rows = rows)
+          # y_train_mb <- subsetTensor(y_train, rows = rows)
+          # xtype_train_mb <- subsetTensor(xtype_train, rows = rows)
+          # train_mb <- lapply(train, function(x) subsetTensor(x, rows = rows))
+          train_mb <- lapply(seq_along(train), function(i) subsetTensor(train[[i]], rows = rows, isSparse = isSparse[i]))
+          
+          optimizer$zero_grad()
+          # y_pred_mb = model(x_train_mb, xtype_train_mb)
+          # y_pred_mb = do.call(model, train_mb[-1])
+          y_pred_mb = do.call(model, c(train_mb[-1],list(...)))
+          # y_pred_mb = do.call(model, c(train_mb[-1],list(horizon = horizon)))
+          # loss = criterion(y_pred_mb, y_train_mb)
+          loss = criterion(y_pred_mb, train_mb[[1]])
+          loss$backward()
+          optimizer$step()
+        }
+        model$eval()
+      }
+      
+      progress[e, loss_train := as.array(criterion(do.call(model, c(train[-1], list(...))), train[[1]]))]
+      if(!is.null(test)){
+        progress[e, loss_test := as.array(criterion(do.call(model, c(test[-1], list(...))), test[[1]]))]
+      }
+      if(!is.null(validation)){
+        progress[e, loss_validation := as.array(criterion(do.call(model, c(validation[-1], list(...))), validation[[1]]))]
+      }
+      if(e %% printEvery == 0){
+        print(str_c("restart: ", rs," epoch:", e," train: ", round(progress[e, loss_train], 5)," test:", round(progress[e, loss_test], 5), " validation:", round(progress[e, loss_validation], 5), " Time:", Sys.time()))
+      }
+      
+      if(!is.null(test)){
+        ebest <- progress[,which.min(loss_test)]
+        if((e == ebest) & !is.null(tempFilePath)){
+          torch_save(model,file.path(tempFilePath,str_c("temp",".t7")))
+        }
+        if(e - ebest >= patience){
+          progress <- progress[1:e,]
+          break()
+        }
+      }
+      
+    }
+    
+    if(!is.null(tempFilePath) & !is.null(test)){
+      model <- torch_load(file.path(tempFilePath,str_c("temp",".t7")))
+      file.remove(file.path(tempFilePath,str_c("temp",".t7")))
+    }
+    
+    modelOut <<- model
+    return(
+      progress
+    )
+  })
+  
+  model <- modelOut
+  progress <- do.call(rbind, out)
+  
+  return(list(
+    model = model,
+    progress = progress
+  ))
+}
+
+
+
+MtMsOLS <- function(y, X, group, s = 1, lambda = 0, R = 10, prefit = F, printEvery = 1){
+  n <- dim(X)[1]
+  k <- dim(X)[2]
+  m <- max(group)
+  groupList <- lapply(1:m, function(i) which(group==i))
+  
+  if(prefit){
+    beta <- solve(t(X)%*%X)%*%t(X)%*%y
+    y <- y - X%*%beta
+  }else{
+    beta <- matrix(0, nrow=ncol(X))
+  }
+  
+  predict <- function(fit, X, group, horizon = 1){
+    m <- max(group)
+    groupList <- lapply(1:m, function(i) which(group==i))
+    
+    k <- ncol(X)
+    Xf <- X
+    for(hi in 1:max(horizon)){
+      X <- Xf[,1:k]
+      
+      yhat <- as.matrix(do.call(c, lapply(1:m, function(i) {
+        Xsub <- X[groupList[[i]],]
+        betasub <- t(fit$theta_s[i,] %*% fit$theta_t) + fit$beta
+        Xsub %*% betasub
+      })))
+      yhat
+      
+      Xf <- cbind(yhat, Xf)
+    }
+    Xf[, (max(horizon) + 1 - rev(horizon)), drop = F]
+  }
+  
+  theta_s <- matrix(0, nrow = m, ncol = s)
+  theta_t <- matrix(0, nrow = s, ncol = k)
+  for(sindex in 1:s){
+    theta_s_hat <- matrix(rnorm(m,1,1),nrow = m)
+    theta_t_hat <- matrix(0,nrow = 1,ncol = k)
+    for(r in 1:R){
+      rs <- rep(NA,n)
+      for(i in 1:m){
+        rs[groupList[[i]]] <- theta_s_hat[i]
+      }
+      Rs <- matrix(rs, nrow = n ,ncol = k)
+      theta_t_hat_new <- t(solve((t(X) * t(Rs)) %*% (Rs * X)) %*% t(X) %*% (rs * y))
+      if(r %% printEvery == 0){
+        message(str_c("s = ", sindex,", iteration = ",r,", delta = ",round(sum(abs(theta_t_hat_new - theta_t_hat)), 5)))
+      }
+      theta_t_hat <- theta_t_hat_new
+      
+      rt <- as.vector(X %*% t(theta_t_hat))
+      rty <- rt * y
+      theta_s_hat <- as.matrix((sapply(1:m, function(i) sum(rty[groupList[[i]]])) + lambda) / (sapply(1:m, function(i) sum(rt[groupList[[i]]]^2)) + lambda))
+    }
+    
+    fit <- list(
+      beta = matrix(0, nrow=ncol(X)),
+      theta_s = theta_s_hat,
+      theta_t = theta_t_hat
+    )
+    yhat <- predict(fit, X, group)
+    
+    y <- y - yhat
+    theta_s[,sindex] <- theta_s_hat
+    theta_t[sindex,] <- theta_t_hat
+  }
+  
+  return(
+    list(
+      beta = beta,
+      theta_s = theta_s,
+      theta_t = theta_t,
+      predict = predict
+    )
+  )
+}
