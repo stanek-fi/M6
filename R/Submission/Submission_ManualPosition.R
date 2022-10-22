@@ -26,10 +26,11 @@ submission <- submission[match(template$ID, submission$Ticker), .(ID = Ticker, R
 submission[, Decision := 0.01 * 0.25]
 
 
-flipID <- submission[,.(ID,FallIndicator = 2*Rank1+Rank2-Rank4-2*Rank5)][order(FallIndicator, decreasing = T)][1:10,ID]
-# flipID <- submission[,.(ID,FallIndicator = 2*Rank1-2*Rank5)][order(FallIndicator,decreasing = T)][1:10,ID]
-submission[ID %in% flipID, Decision := - Decision]
+# flipID <- submission[,.(ID,FallIndicator = 2*Rank1+Rank2-Rank4-2*Rank5)][order(FallIndicator, decreasing = T)][1:10,ID]
+# # flipID <- submission[,.(ID,FallIndicator = 2*Rank1-2*Rank5)][order(FallIndicator,decreasing = T)][1:10,ID]
+# submission[ID %in% flipID, Decision := - Decision]
 
+# submission[, Decision := - Decision]
 
 
 submission <- validateSubmission(submission, Round = T)

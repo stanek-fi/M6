@@ -50,6 +50,9 @@ if(sum(!(tickers %in% names(Stocks)))>0){
 }
 
 
+# StockNames[Symbol %in% c("ANAT", "ENIA", "JW-A", "NCBS")]
+names(Stocks)[sapply(Stocks, function(y) {is.null(y)})]
+
 Stocks <- Stocks[sapply(Stocks, function(y) {!is.null(y)})]
 table(as.Date(sapply(Stocks, function(s) s[.N,index])))
 

@@ -24,10 +24,10 @@ featureList <- c(
 # Shifts <- c(0)
 Shifts <- c(0,7,14,21)
 # Shifts <- c(0,7)
-Submission = 8
+Submission = 9
 IntervalInfos <- GenIntervalInfos(Submission = Submission, Shifts = Shifts)
 
-GenerateStockAggr <- T
+GenerateStockAggr <- F
 if(GenerateStockAggr){
   StockNames <- readRDS(file.path("Data","StockNames.RDS"))
   StockNames[Symbol=="FB",Symbol := "META"]  # * needed to account for the fact that one cannot download FB data under FB ticker anymore
@@ -37,7 +37,8 @@ if(GenerateStockAggr){
   # temp <- StockNames[M6Dataset>0][order(M6Dataset),.(Symbol,M6Dataset)]
   # temp <- StockNames[M6Dataset>0 & Symbol != "JW-A"][order(M6Dataset),.(Symbol,M6Dataset)] #TODO: this is temp fix fore exluding the  JW-A stock which could not be downloaded. Update stock names to get this fixed
   # temp <- StockNames[M6Dataset>0 & !(Symbol %in% c("JW-A", "NCBS"))][order(M6Dataset),.(Symbol,M6Dataset)] #TODO: this is temp fix fore exluding the  JW-A stock which could not be downloaded. Update stock names to get this fixed
-  temp <- StockNames[M6Dataset>0 & !(Symbol %in% c("JW-A", "NCBS", "ANAT", "ENIA"))][order(M6Dataset),.(Symbol,M6Dataset)] #TODO: this is temp fix fore exluding the  JW-A stock which could not be downloaded. Update stock names to get this fixed
+  # temp <- StockNames[M6Dataset>0 & !(Symbol %in% c("JW-A", "NCBS", "ANAT", "ENIA"))][order(M6Dataset),.(Symbol,M6Dataset)] #TODO: this is temp fix fore exluding the  JW-A stock which could not be downloaded. Update stock names to get this fixed
+  temp <- StockNames[M6Dataset>0 & !(Symbol %in% c("JW-A", "NCBS", "ANAT", "ENIA", "ACC"))][order(M6Dataset),.(Symbol,M6Dataset)] #TODO: this is temp fix fore exluding the  JW-A stock which could not be downloaded. Update stock names to get this fixed
   Stocks <- Stocks[temp$Symbol]
   M6Datasets <- temp$M6Dataset
   StocksAggr <- GenStocksAggr(Stocks, IntervalInfos, featureList, M6Datasets, CheckLeakage = F)
@@ -139,8 +140,11 @@ baseModel = prepareBaseModel(baseModel,x = x_train)
 # train <- list(y_train, x_train)
 # test <- list(y_test, x_test)
 # validation <- list(y_validation, x_validation)
-minibatch <- 1000
-lr <- c(0.01,0.001,0.0005,0.0001)
+# minibatch <- 1000
+minibatch <- 200
+
+# lr <- c(0.01,0.001,0.0005,0.0001)
+lr <- c(0.01)
 
 if(T){
   start <- Sys.time()
@@ -178,7 +182,7 @@ loss_validation_base_M6Dataset <- sapply(1:max(ValidationInfo$M6Dataset), functi
 # fit_MtMsOLS <- MtMsOLS(y_MtMsOLS, X_MtMsOLS, group_MtMsOLS, s = 2, lambda = 0, R = 40, prefit = T, printEvery = 1)
 
 horizon <- NULL
-r <- 2
+r <- 1
 set.seed(r)
 torch_manual_seed(r)
 
@@ -203,11 +207,11 @@ for (i in includedLayers) {
 metaModel <- MetaModel(
   baseModel, 
   xtype_train, 
-  mesaParameterSize = 2, 
+  mesaParameterSize = 1, 
   allowBias = T, 
   pDropout = 0,  
   initMesaRange = 0, 
-  initMetaRange = 0.1,
+  initMetaRange = 1,
   allowMetaStructure = allowMetaStructure
 )
 # state <- metaModel$state_dict()
@@ -219,8 +223,10 @@ metaModel <- MetaModel(
 # metaModel$load_state_dict(state)
 
 minibatch <- function() {minibatchSampler(100,xtype_train)}
+# minibatch <- function() {minibatchSampler(5,xtype_train)}
 # minibatch <- 10000
-lr <- c(0.01,0.001,0.001,0.0005,0.0003,0.0001,0.00005)
+# lr <- c(0.01,0.001,0.001,0.0005,0.0003,0.0001,0.00005)
+lr <- c(0.01,0.001,0.0005,0.0001)
 # lr <- c(0.001)
 # train <- list(y_train, x_train, xtype_train)
 # rows <- StocksAggr[TrainRows][,which(IntervalStart > as.Date("2010-01-10"))]
@@ -233,7 +239,7 @@ if(T){
   start <- Sys.time()
   # fit <- trainModel(model = metaModel, criterion, train = list(y_train, x_train, xtype_train), test = list(y_test, x_test, xtype_test), validation = list(y_validation, x_validation, xtype_validation), epochs = 100, minibatch = minibatch, tempFilePath = tempFilePath, patience = 5, printEvery = 1, lr = lr)
   # fit <- trainModel(model = metaModel, criterion, train = train, test = list(y_test, x_test, xtype_test), validation = list(y_validation, x_validation, xtype_validation), epochs = 100, minibatch = minibatch, tempFilePath = tempFilePath, patience = 5, printEvery = 1, lr = lr)
-  fit <- trainModel2(model = metaModel, criterion, train = list(y_train, x_train, xtype_train), test = list(y_test, x_test, xtype_test), validation = list(y_validation, x_validation, xtype_validation), epochs = 100, minibatch = minibatch, tempFilePath = tempFilePath, patience = 20, printEvery = 1, lr = lr)
+  fit <- trainModel2(model = metaModel, criterion, train = list(y_train, x_train, xtype_train), test = list(y_test, x_test, xtype_test), validation = list(y_validation, x_validation, xtype_validation), epochs = 100, minibatch = minibatch, tempFilePath = tempFilePath, patience = 10, printEvery = 1, lr = lr)
   Sys.time() - start 
   metaModel <- fit$model
   metaModelProgress <- fit$progress
