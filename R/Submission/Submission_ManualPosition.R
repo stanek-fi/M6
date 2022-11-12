@@ -25,15 +25,25 @@ period <- submission[,str_c(unique(IntervalStart), " - " ,unique(IntervalEnd))]
 submission <- submission[match(template$ID, submission$Ticker), .(ID = Ticker, Rank1 , Rank2, Rank3, Rank4, Rank5, Decision = 0)]
 submission[, Decision := 0.01 * 0.25]
 
+ZeroReturnCorrection <- readRDS(file.path("Precomputed","ZeroReturnCorrection.RDS"))
+submission[ID=="DRE", Rank1 := ZeroReturnCorrection[1]]
+submission[ID=="DRE", Rank2 := ZeroReturnCorrection[2]]
+submission[ID=="DRE", Rank3 := ZeroReturnCorrection[3]]
+submission[ID=="DRE", Rank4 := ZeroReturnCorrection[4]]
+submission[ID=="DRE", Rank5 := ZeroReturnCorrection[5]]
+# submission
+
+
+
 
 # flipID <- submission[,.(ID,FallIndicator = 2*Rank1+Rank2-Rank4-2*Rank5)][order(FallIndicator, decreasing = T)][1:10,ID]
 # # flipID <- submission[,.(ID,FallIndicator = 2*Rank1-2*Rank5)][order(FallIndicator,decreasing = T)][1:10,ID]
 # submission[ID %in% flipID, Decision := - Decision]
 
 # submission[, Decision := - Decision]
-
-
-submission <- validateSubmission(submission, Round = T)
+# a != T
+# s <- 0
+submission <- validateSubmission(submission, Round = TRUE)
 
 write.csv(submission,file.path("Results",str_c("Submission_", period, ".csv")),row.names = F, quote=FALSE)
 

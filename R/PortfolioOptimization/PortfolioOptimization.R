@@ -49,11 +49,15 @@ subsetPriceRatios <- samplePriceRatios(PriceRatios, N, StartDate, EndDate, auxil
 
 models <- c(
   # createModelCombinations(laggedExPostOptimal, list(window=c(250,1000))),
-  createModelCombinations(equalWeights),
+  createModelCombinations(equalWeights, list(alpha = 1)),
+  createModelCombinations(equalWeights, list(alpha = 0.25)),
+  createModelCombinations(equalWeights, list(alpha = 0.1)),
+  createModelCombinations(equalWeights, list(alpha = 0.01)),
+  createModelCombinations(equalWeights, list(alpha = 0.001))
   # createModelCombinations(unfeasibleAnalyticAproximation),
   # createModelCombinations(copulaSim, list(muInfo = c("known","knownMean","constant","estimated"),sigmaInfo = c("known","estimated"), R=1000, numStarts = c(10)))
-  createModelCombinations(copulaSim, list(muInfo = c("constant"),sigmaInfo = c("known"), R=1000, numStarts = c(1), nonnegative=c(T))),
-  createModelCombinations(copulaSim, list(muInfo = c("constant"),sigmaInfo = c("estimated"), R=1000, numStarts = c(1), nonnegative=c(T), lambda = c(0.1,0.5,0.8,0.94,0.99)))
+  # createModelCombinations(copulaSim, list(muInfo = c("constant"),sigmaInfo = c("known"), R=1000, numStarts = c(1), nonnegative=c(T))),
+  # createModelCombinations(copulaSim, list(muInfo = c("constant"),sigmaInfo = c("estimated"), R=1000, numStarts = c(1), nonnegative=c(T), lambda = c(0.1,0.5,0.8,0.94,0.99)))
 )
 
 intervals <- subsetPriceRatios[,unique(Interval)][-1]
@@ -79,8 +83,10 @@ for(i in seq_along(intervals)){
   )
 }
 
+d <- do.call(rbind,lapply(res, function(x) {cbind(startDate = x$info$startDate, as.data.table(lapply(x$models,function(y) y$sharp)))}))
+apply(d,2,function(x) {mean(x,na.rm=T)})
 
-saveRDS(res,"Results/res.RDS")
+# saveRDS(res,"Results/res.RDS")
 # res <- readRDS("Results/res.RDS")
 
 d <- do.call(rbind,lapply(res, function(x) {cbind(startDate = x$info$startDate, as.data.table(lapply(x$models,function(y) y$sharp)))}))

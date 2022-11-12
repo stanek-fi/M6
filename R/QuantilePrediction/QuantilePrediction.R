@@ -24,7 +24,7 @@ featureList <- c(
 # Shifts <- c(0)
 Shifts <- c(0,7,14,21)
 # Shifts <- c(0,7)
-Submission = 9
+Submission = 10
 IntervalInfos <- GenIntervalInfos(Submission = Submission, Shifts = Shifts)
 
 GenerateStockAggr <- F
@@ -38,7 +38,8 @@ if(GenerateStockAggr){
   # temp <- StockNames[M6Dataset>0 & Symbol != "JW-A"][order(M6Dataset),.(Symbol,M6Dataset)] #TODO: this is temp fix fore exluding the  JW-A stock which could not be downloaded. Update stock names to get this fixed
   # temp <- StockNames[M6Dataset>0 & !(Symbol %in% c("JW-A", "NCBS"))][order(M6Dataset),.(Symbol,M6Dataset)] #TODO: this is temp fix fore exluding the  JW-A stock which could not be downloaded. Update stock names to get this fixed
   # temp <- StockNames[M6Dataset>0 & !(Symbol %in% c("JW-A", "NCBS", "ANAT", "ENIA"))][order(M6Dataset),.(Symbol,M6Dataset)] #TODO: this is temp fix fore exluding the  JW-A stock which could not be downloaded. Update stock names to get this fixed
-  temp <- StockNames[M6Dataset>0 & !(Symbol %in% c("JW-A", "NCBS", "ANAT", "ENIA", "ACC"))][order(M6Dataset),.(Symbol,M6Dataset)] #TODO: this is temp fix fore exluding the  JW-A stock which could not be downloaded. Update stock names to get this fixed
+  # temp <- StockNames[M6Dataset>0 & !(Symbol %in% c("JW-A", "NCBS", "ANAT", "ENIA", "ACC"))][order(M6Dataset),.(Symbol,M6Dataset)] #TODO: this is temp fix fore exluding the  JW-A stock which could not be downloaded. Update stock names to get this fixed
+  temp <- StockNames[M6Dataset>0 & !(Symbol %in% c("JW-A", "NCBS", "ANAT", "ENIA", "ACC", "LFC", "SHI"))][order(M6Dataset),.(Symbol,M6Dataset)] #TODO: this is temp fix fore exluding the  JW-A stock which could not be downloaded. Update stock names to get this fixed
   Stocks <- Stocks[temp$Symbol]
   M6Datasets <- temp$M6Dataset
   StocksAggr <- GenStocksAggr(Stocks, IntervalInfos, featureList, M6Datasets, CheckLeakage = F)
