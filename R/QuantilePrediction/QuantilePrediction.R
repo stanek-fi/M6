@@ -24,8 +24,16 @@ featureList <- c(
 # Shifts <- c(0)
 Shifts <- c(0,7,14,21)
 # Shifts <- c(0,7)
-Submission = 11
+Submission = 12
 IntervalInfos <- GenIntervalInfos(Submission = Submission, Shifts = Shifts)
+# str(IntervalInfos)
+# str(IntervalInfos[[1]])
+# IntervalInfos[[1]]$IntervalNames
+
+# str(StocksAggr)
+# StocksAggr[M6Dataset==1,unique(Interval)]
+# StocksAggr[M6Dataset==1&Interval=="2023-01-09 : 2023-02-05",.(Ticker,Interval,Return,VolatilityLag1,VolatilityLag2,ETF,chaikinAD,DonchianChannel_high)]
+
 
 GenerateStockAggr <- F
 if(GenerateStockAggr){
@@ -40,7 +48,8 @@ if(GenerateStockAggr){
   # temp <- StockNames[M6Dataset>0 & !(Symbol %in% c("JW-A", "NCBS", "ANAT", "ENIA"))][order(M6Dataset),.(Symbol,M6Dataset)] #TODO: this is temp fix fore exluding the  JW-A stock which could not be downloaded. Update stock names to get this fixed
   # temp <- StockNames[M6Dataset>0 & !(Symbol %in% c("JW-A", "NCBS", "ANAT", "ENIA", "ACC"))][order(M6Dataset),.(Symbol,M6Dataset)] #TODO: this is temp fix fore exluding the  JW-A stock which could not be downloaded. Update stock names to get this fixed
   # temp <- StockNames[M6Dataset>0 & !(Symbol %in% c("JW-A", "NCBS", "ANAT", "ENIA", "ACC", "LFC", "SHI"))][order(M6Dataset),.(Symbol,M6Dataset)] #TODO: this is temp fix fore exluding the  JW-A stock which could not be downloaded. Update stock names to get this fixed
-  temp <- StockNames[M6Dataset>0 & !(Symbol %in% c("JW-A", "NCBS", "ANAT", "ENIA", "ACC", "LFC", "SHI", "CTXS", "MANT", "SNP"))][order(M6Dataset),.(Symbol,M6Dataset)] #TODO: this is temp fix fore exluding the  JW-A stock which could not be downloaded. Update stock names to get this fixed
+  # temp <- StockNames[M6Dataset>0 & !(Symbol %in% c("JW-A", "NCBS", "ANAT", "ENIA", "ACC", "LFC", "SHI", "CTXS", "MANT", "SNP"))][order(M6Dataset),.(Symbol,M6Dataset)] #TODO: this is temp fix fore exluding the  JW-A stock which could not be downloaded. Update stock names to get this fixed
+  temp <- StockNames[M6Dataset>0 & !(Symbol %in% c("JW-A", "NCBS", "ANAT", "ENIA", "ACC", "LFC", "SHI", "CTXS", "MANT", "SNP", "SZC", "WRE", "Y", "BAM"))][order(M6Dataset),.(Symbol,M6Dataset)] #TODO: this is temp fix fore exluding the  JW-A stock which could not be downloaded. Update stock names to get this fixed
 
   Stocks <- Stocks[temp$Symbol]
   M6Datasets <- temp$M6Dataset
@@ -50,7 +59,7 @@ if(GenerateStockAggr){
 }else{
   StocksAggr <- readRDS(file.path("Precomputed","StocksAggr.RDS"))
 }
-
+# names(Stocks)[106]
 # StocksAggr[Shif@t == 0 & M6Dataset == 1]
 
 featureNames <- names(StocksAggr)[!(names(StocksAggr) %in% c("Ticker", "Interval", "Return", "Shift", "M6Dataset", "ReturnQuintile", "IntervalStart", "IntervalEnd"))]
@@ -360,6 +369,10 @@ QuantilePredictions <- list(
   )
 )
 saveRDS(QuantilePredictions, file.path("Precomputed","QuantilePredictions.RDS"))
+
+# cbind(StocksAggrValidation, setNames(as.data.table(as.array(baseModel(x_validation))), str_c("Rank",1:5)))
+# cbind(StocksAggrValidation, setNames(as.data.table(as.array(metaModel(x_validation, xtype_validation))), str_c("Rank",1:5)))
+
 
 
 
