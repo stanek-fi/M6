@@ -1,9 +1,0 @@
-to submit new month:
-1) Run GenStocksAll.R to generate new data
-(it is possible but not necessary to also update stock names with GenStockNames.R)
-(I commeted out the StockName update becouse of missing activity...fix it if needed)
-(Upadete: monitor which stocks fail and add them into exlusion in the next step)
-2) Run QuantilePrediction.R to create new featerues and estimate the models
-(rememeber to update submission number and set GenerateStockAggr <- T)
-3) Run Submission_EqualPosition.R to generate the csv
-4) Upload it
